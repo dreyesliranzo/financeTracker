@@ -17,8 +17,10 @@ import { formatCurrency } from "@/lib/money";
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const queryClient = useQueryClient();
-  const rangeStart = format(startOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
-  const rangeEnd = format(endOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
+  const [year, monthIndex] = month.split("-").map((value) => Number(value));
+  const monthDate = new Date(year, monthIndex - 1, 1);
+  const rangeStart = format(startOfMonth(monthDate), "yyyy-MM-dd");
+  const rangeEnd = format(endOfMonth(monthDate), "yyyy-MM-dd");
 
   const { data: budgets = [] } = useQuery({
     queryKey: ["budgets", month],
