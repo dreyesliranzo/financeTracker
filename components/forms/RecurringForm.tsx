@@ -113,7 +113,10 @@ export function RecurringForm({
     if (!account?.currency_code) return;
     const currentCurrency = form.getValues("currency_code");
     if (currentCurrency !== account.currency_code) {
-      form.setValue("currency_code", account.currency_code);
+      form.setValue(
+        "currency_code",
+        account.currency_code as RecurringFormValues["currency_code"]
+      );
     }
   }, [accountId, accounts, form]);
 
@@ -121,7 +124,7 @@ export function RecurringForm({
     if (!user) return;
 
     const payload = {
-      name: values.name?.trim() || null,
+      name: values.name?.trim() || undefined,
       amount_cents: Math.abs(parseCurrencyToCents(values.amount)),
       type: values.type,
       category_id: values.category_id,
@@ -182,7 +185,9 @@ export function RecurringForm({
           <Label>Currency</Label>
           <Select
             value={form.watch("currency_code")}
-            onValueChange={(value) => form.setValue("currency_code", value)}
+            onValueChange={(value) =>
+              form.setValue("currency_code", value as RecurringFormValues["currency_code"])
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select currency" />

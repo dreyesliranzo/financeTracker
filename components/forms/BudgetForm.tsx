@@ -132,7 +132,9 @@ export function BudgetForm({
           <Label>Currency</Label>
           <Select
             value={form.watch("currency_code")}
-            onValueChange={(value) => form.setValue("currency_code", value)}
+            onValueChange={(value) =>
+              form.setValue("currency_code", value as BudgetFormValues["currency_code"])
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select currency" />

@@ -94,7 +94,10 @@ export function TransactionForm({
     if (!account?.currency_code) return;
     const currentCurrency = form.getValues("currency_code");
     if (currentCurrency !== account.currency_code) {
-      form.setValue("currency_code", account.currency_code);
+      form.setValue(
+        "currency_code",
+        account.currency_code as TransactionFormValues["currency_code"]
+      );
     }
   }, [accountId, accounts, form]);
 
@@ -174,7 +177,9 @@ export function TransactionForm({
           <Label>Currency</Label>
           <Select
             value={form.watch("currency_code")}
-            onValueChange={(value) => form.setValue("currency_code", value)}
+            onValueChange={(value) =>
+              form.setValue("currency_code", value as TransactionFormValues["currency_code"])
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select currency" />

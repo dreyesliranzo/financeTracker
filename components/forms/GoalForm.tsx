@@ -114,7 +114,9 @@ export function GoalForm({
           <Label>Currency</Label>
           <Select
             value={form.watch("currency_code")}
-            onValueChange={(value) => form.setValue("currency_code", value)}
+            onValueChange={(value) =>
+              form.setValue("currency_code", value as GoalFormValues["currency_code"])
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select currency" />

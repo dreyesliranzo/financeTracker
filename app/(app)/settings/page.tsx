@@ -27,6 +27,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 export default function SettingsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  type CurrencyCode = (typeof currencyOptions)[number]["value"];
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
     queryFn: fetchAccounts
@@ -62,7 +63,7 @@ export default function SettingsPage() {
     tags: ""
   });
   const [isImporting, setIsImporting] = useState(false);
-  const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const [defaultCurrency, setDefaultCurrency] = useState<CurrencyCode>("USD");
   const noneOption = "__none__";
 
   const mappingComplete = useMemo(() => {
@@ -174,9 +175,9 @@ export default function SettingsPage() {
         const currencyValue = mapping.currency
           ? row[mapping.currency]?.toUpperCase()
           : defaultCurrency;
-        const currencyCode = currencyLookup.has(currencyValue)
+        const currencyCode = (currencyLookup.has(currencyValue)
           ? currencyValue
-          : defaultCurrency;
+          : defaultCurrency) as CurrencyCode;
 
         await createTransaction(user.id, {
           date: dateValue,
@@ -319,9 +320,9 @@ export default function SettingsPage() {
 
   const handleCurrencyChange = async (value: string) => {
     if (!user) return;
-    setDefaultCurrency(value);
+    setDefaultCurrency(value as CurrencyCode);
     try {
-      await upsertProfile({ user_id: user.id, default_currency: value });
+      await upsertProfile({ user_id: user.id, default_currency: value as CurrencyCode });
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Default currency updated");
     } catch (error) {
