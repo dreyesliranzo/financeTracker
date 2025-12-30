@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { deleteBudget } from "@/lib/supabase/mutations";
 import { BudgetForm } from "@/components/forms/BudgetForm";
@@ -30,20 +31,25 @@ export default function BudgetsPage() {
     queryFn: fetchProfile
   });
 
-  const { data: budgets = [] } = useQuery({
+  const budgetsQuery = useQuery({
     queryKey: ["budgets", month, selectedCurrency],
     queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
   });
+  const budgets = budgetsQuery.data ?? [];
 
-  const { data: categories = [] } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
+  const categories = categoriesQuery.data ?? [];
 
-  const { data: transactions = [] } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
     queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
+  const transactions = transactionsQuery.data ?? [];
+
+  const isLoading = budgetsQuery.isLoading || categoriesQuery.isLoading || transactionsQuery.isLoading;
 
   useEffect(() => {
     if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
@@ -128,67 +134,80 @@ export default function BudgetsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {budgetsWithProgress.map((budget) => {
-          const ratio = budget.limit_cents
-            ? budget.spent / budget.limit_cents
-            : 0;
-          return (
-            <Card key={budget.id}>
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle>{budget.categoryName}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(budget.spent, selectedCurrency)} of {formatCurrency(budget.limit_cents, selectedCurrency)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <BudgetForm budget={budget} />
-                    </DialogContent>
-                  </Dialog>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete budget?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(budget.id!)}>
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-2 w-full rounded-full bg-muted/40">
-                  <div
-                    className="h-2 rounded-full bg-primary"
-                    style={{ width: `${Math.min(ratio * 100, 100)}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {ratio >= 1 ? "Over budget" : `${Math.round(ratio * 100)}% used`}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {isLoading
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <Card key={`budget-skeleton-${index}`}>
+                <CardHeader className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-44" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-2 w-full" />
+                  <Skeleton className="h-3 w-20" />
+                </CardContent>
+              </Card>
+            ))
+          : budgetsWithProgress.map((budget) => {
+              const ratio = budget.limit_cents
+                ? budget.spent / budget.limit_cents
+                : 0;
+              return (
+                <Card key={budget.id}>
+                  <CardHeader className="flex flex-row items-start justify-between">
+                    <div>
+                      <CardTitle>{budget.categoryName}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {formatCurrency(budget.spent, selectedCurrency)} of {formatCurrency(budget.limit_cents, selectedCurrency)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            Edit
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <BudgetForm budget={budget} />
+                        </DialogContent>
+                      </Dialog>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete budget?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(budget.id!)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-2 w-full rounded-full bg-muted/40">
+                      <div
+                        className="h-2 rounded-full bg-primary"
+                        style={{ width: `${Math.min(ratio * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {ratio >= 1 ? "Over budget" : `${Math.round(ratio * 100)}% used`}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
       </div>
     </div>
   );

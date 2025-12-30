@@ -65,6 +65,10 @@ export function Sidebar() {
         <p className="font-medium text-foreground">Sync status</p>
         <p className="mt-1">Realtime updates enabled.</p>
       </div>
+
+      <p className="mt-6 text-[11px] text-muted-foreground">
+        Copyright Diego Reyes
+      </p>
     </aside>
   );
 }

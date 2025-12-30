@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RecurringForm } from "@/components/forms/RecurringForm";
 import { EmptyState } from "@/components/empty/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function RecurringTransactionsTable() {
   const queryClient = useQueryClient();
@@ -49,6 +50,8 @@ export function RecurringTransactionsTable() {
         .map((account) => [account.id!, account.name])
     );
   }, [accounts]);
+
+  const skeletonRows = useMemo(() => Array.from({ length: 5 }, (_, index) => index), []);
 
   const handleToggleActive = async (item: RecurringTransaction) => {
     try {
@@ -108,7 +111,7 @@ export function RecurringTransactionsTable() {
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/70">
-        <Table>
+        <Table className="min-w-[980px]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -122,79 +125,111 @@ export function RecurringTransactionsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recurring.map((item) => {
-              const accountName = item.account_id
-                ? accountMap.get(item.account_id)
-                : undefined;
-              const categoryName = item.category_id
-                ? categoryMap.get(item.category_id)
-                : undefined;
-              const title =
-                item.name ||
-                item.merchant ||
-                categoryName ||
-                (item.type === "income" ? "Income" : "Expense");
-              return (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{title}</TableCell>
-                  <TableCell className="capitalize">{item.cadence}</TableCell>
-                  <TableCell>{item.next_run}</TableCell>
-                  <TableCell>{accountName ?? "-"}</TableCell>
-                  <TableCell>{categoryName ?? "-"}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatSignedCurrency(
-                      item.amount_cents,
-                      item.type,
-                      item.currency_code ?? "USD"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={item.active ? "default" : "secondary"}>
-                      {item.active ? "Active" : "Paused"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(item)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleActive(item)}
-                      >
-                        {item.active ? "Pause" : "Resume"}
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            Delete
+            {isLoading
+              ? skeletonRows.map((row) => (
+                  <TableRow key={`recurring-skeleton-${row}`}>
+                    <TableCell>
+                      <Skeleton className="h-4 w-28" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="ml-auto h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Skeleton className="h-8 w-12" />
+                        <Skeleton className="h-8 w-12" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              : recurring.map((item) => {
+                  const accountName = item.account_id
+                    ? accountMap.get(item.account_id)
+                    : undefined;
+                  const categoryName = item.category_id
+                    ? categoryMap.get(item.category_id)
+                    : undefined;
+                  const title =
+                    item.name ||
+                    item.merchant ||
+                    categoryName ||
+                    (item.type === "income" ? "Income" : "Expense");
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{title}</TableCell>
+                      <TableCell className="capitalize">{item.cadence}</TableCell>
+                      <TableCell>{item.next_run}</TableCell>
+                      <TableCell>{accountName ?? "-"}</TableCell>
+                      <TableCell>{categoryName ?? "-"}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatSignedCurrency(
+                          item.amount_cents,
+                          item.type,
+                          item.currency_code ?? "USD"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.active ? "default" : "secondary"}>
+                          {item.active ? "Active" : "Paused"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(item)}
+                          >
+                            Edit
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete recurring transaction?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Future runs will stop immediately.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(item.id!)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleActive(item)}
+                          >
+                            {item.active ? "Pause" : "Resume"}
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete recurring transaction?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Future runs will stop immediately.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(item.id!)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
           </TableBody>
         </Table>
       </div>

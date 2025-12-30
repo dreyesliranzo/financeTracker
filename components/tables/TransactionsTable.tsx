@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const sortOptions = [
   { value: "date", label: "Date" },
@@ -126,6 +127,8 @@ export function TransactionsTable() {
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
+
+  const skeletonRows = useMemo(() => Array.from({ length: 6 }, (_, index) => index), []);
 
   useEffect(() => {
     setPage(1);
@@ -311,7 +314,7 @@ export function TransactionsTable() {
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/70">
-        <Table>
+        <Table className="min-w-[980px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
@@ -333,71 +336,106 @@ export function TransactionsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.map((transaction) => {
-              const categoryName = transaction.category_id
-                ? categoryMap.get(transaction.category_id)
-                : undefined;
-              const accountName = transaction.account_id
-                ? accountMap.get(transaction.account_id)
-                : undefined;
-              return (
-                <TableRow key={transaction.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedIds.includes(transaction.id!)}
-                      onCheckedChange={(value) =>
-                        toggleSelect(transaction.id!, Boolean(value))
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>{transaction.date}</TableCell>
-                  <TableCell>{transaction.merchant ?? "-"}</TableCell>
-                  <TableCell>{categoryName ?? "-"}</TableCell>
-                  <TableCell>{accountName ?? "-"}</TableCell>
-                  <TableCell className="capitalize">{transaction.type}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatSignedCurrency(
-                      transaction.amount_cents,
-                      transaction.type,
-                      transaction.currency_code ?? "USD"
-                    )}
-                  </TableCell>
-                  <TableCell>{transaction.currency_code ?? "USD"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(transaction)}
-                      >
-                        Edit
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            Delete
+            {isLoading
+              ? skeletonRows.map((row) => (
+                  <TableRow key={`skeleton-${row}`}>
+                    <TableCell>
+                      <Skeleton className="h-4 w-4" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-28" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="ml-auto h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-10" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Skeleton className="h-8 w-12" />
+                        <Skeleton className="h-8 w-12" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              : paged.map((transaction) => {
+                  const categoryName = transaction.category_id
+                    ? categoryMap.get(transaction.category_id)
+                    : undefined;
+                  const accountName = transaction.account_id
+                    ? accountMap.get(transaction.account_id)
+                    : undefined;
+                  return (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.includes(transaction.id!)}
+                          onCheckedChange={(value) =>
+                            toggleSelect(transaction.id!, Boolean(value))
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>{transaction.date}</TableCell>
+                      <TableCell>{transaction.merchant ?? "-"}</TableCell>
+                      <TableCell>{categoryName ?? "-"}</TableCell>
+                      <TableCell>{accountName ?? "-"}</TableCell>
+                      <TableCell className="capitalize">{transaction.type}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatSignedCurrency(
+                          transaction.amount_cents,
+                          transaction.type,
+                          transaction.currency_code ?? "USD"
+                        )}
+                      </TableCell>
+                      <TableCell>{transaction.currency_code ?? "USD"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(transaction)}
+                          >
+                            Edit
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(transaction.id!)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(transaction.id!)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
           </TableBody>
         </Table>
       </div>

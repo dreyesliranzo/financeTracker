@@ -6,6 +6,7 @@ import { endOfMonth, format, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
@@ -26,20 +27,25 @@ export default function DashboardPage() {
     queryFn: fetchProfile
   });
 
-  const { data: transactions = [] } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
     queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
+  const transactions = transactionsQuery.data ?? [];
 
-  const { data: categories = [] } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
+  const categories = categoriesQuery.data ?? [];
 
-  const { data: budgets = [] } = useQuery({
+  const budgetsQuery = useQuery({
     queryKey: ["budgets", month, selectedCurrency],
     queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
   });
+  const budgets = budgetsQuery.data ?? [];
+
+  const isLoading = transactionsQuery.isLoading || budgetsQuery.isLoading || categoriesQuery.isLoading;
 
   useEffect(() => {
     if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
@@ -170,81 +176,111 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-28" />
+          ) : (
             <div className="text-2xl font-semibold">
               {formatCurrency(net, selectedCurrency)}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Income</CardTitle>
           </CardHeader>
-          <CardContent>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-28" />
+          ) : (
             <div className="text-2xl font-semibold text-emerald-400">
               {formatCurrency(income, selectedCurrency)}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Expenses</CardTitle>
           </CardHeader>
-          <CardContent>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-28" />
+          ) : (
             <div className="text-2xl font-semibold text-rose-400">
               {formatCurrency(expense, selectedCurrency)}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               Remaining budget
             </CardTitle>
           </CardHeader>
-          <CardContent>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-28" />
+          ) : (
             <div className="text-2xl font-semibold">
               {formatCurrency(remainingBudget, selectedCurrency)}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Expenses by category</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ExpenseByCategoryChart data={expenseByCategory} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Cashflow</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CashflowChart data={cashflowData} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Budget progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {budgetProgress.length > 0 ? (
-            <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Set a budget to track your progress.
-            </p>
           )}
         </CardContent>
       </Card>
     </div>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Expenses by category</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : (
+            <ExpenseByCategoryChart data={expenseByCategory} />
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Cashflow</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : (
+            <CashflowChart data={cashflowData} />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+
+      <Card>
+      <CardHeader>
+        <CardTitle>Budget progress</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : budgetProgress.length > 0 ? (
+          <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Set a budget to track your progress.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  </div>
   );
 }
