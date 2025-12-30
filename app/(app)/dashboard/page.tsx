@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
 export default function DashboardPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const didSelectCurrency = useRef(false);
   const [year, monthIndex] = month.split("-").map((value) => Number(value));
   const monthDate = new Date(year, monthIndex - 1, 1);
   const rangeStart = format(startOfMonth(monthDate), "yyyy-MM-dd");
@@ -48,10 +49,10 @@ export default function DashboardPage() {
   const isLoading = transactionsQuery.isLoading || budgetsQuery.isLoading || categoriesQuery.isLoading;
 
   useEffect(() => {
-    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
-      setSelectedCurrency(profile.default_currency);
-    }
-  }, [profile, selectedCurrency]);
+    if (!profile?.default_currency) return;
+    if (didSelectCurrency.current) return;
+    setSelectedCurrency(profile.default_currency);
+  }, [profile?.default_currency]);
 
   const categoryNameMap = useMemo(() => {
     return new Map(
@@ -158,7 +159,13 @@ export default function DashboardPage() {
             onChange={(event) => setMonth(event.target.value)}
             className="w-[170px]"
           />
-          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+          <Select
+            value={selectedCurrency}
+            onValueChange={(value) => {
+              didSelectCurrency.current = true;
+              setSelectedCurrency(value);
+            }}
+          >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Currency" />
             </SelectTrigger>

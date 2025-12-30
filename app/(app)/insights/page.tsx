@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ export default function InsightsPage() {
   const currentMonth = new Date();
   const previousMonth = subMonths(currentMonth, 1);
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const didSelectCurrency = useRef(false);
 
   const rangeStart = format(startOfMonth(previousMonth), "yyyy-MM-dd");
   const rangeEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
@@ -33,10 +34,10 @@ export default function InsightsPage() {
   });
 
   useEffect(() => {
-    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
-      setSelectedCurrency(profile.default_currency);
-    }
-  }, [profile, selectedCurrency]);
+    if (!profile?.default_currency) return;
+    if (didSelectCurrency.current) return;
+    setSelectedCurrency(profile.default_currency);
+  }, [profile?.default_currency]);
 
   const categoryNameMap = useMemo(() => {
     return new Map(
@@ -145,7 +146,13 @@ export default function InsightsPage() {
         </p>
       </div>
       <div className="flex justify-end">
-        <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+        <Select
+          value={selectedCurrency}
+          onValueChange={(value) => {
+            didSelectCurrency.current = true;
+            setSelectedCurrency(value);
+          }}
+        >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Currency" />
           </SelectTrigger>

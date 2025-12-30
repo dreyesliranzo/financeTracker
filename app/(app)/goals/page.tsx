@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import { deleteGoal } from "@/lib/supabase/mutations";
 export default function GoalsPage() {
   const queryClient = useQueryClient();
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const didSelectCurrency = useRef(false);
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -31,10 +32,10 @@ export default function GoalsPage() {
   });
 
   useEffect(() => {
-    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
-      setSelectedCurrency(profile.default_currency);
-    }
-  }, [profile, selectedCurrency]);
+    if (!profile?.default_currency) return;
+    if (didSelectCurrency.current) return;
+    setSelectedCurrency(profile.default_currency);
+  }, [profile?.default_currency]);
 
   const sortedGoals = useMemo(() => {
     return [...goals].sort((a, b) => b.target_cents - a.target_cents);
@@ -61,7 +62,13 @@ export default function GoalsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+          <Select
+            value={selectedCurrency}
+            onValueChange={(value) => {
+              didSelectCurrency.current = true;
+              setSelectedCurrency(value);
+            }}
+          >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Currency" />
             </SelectTrigger>

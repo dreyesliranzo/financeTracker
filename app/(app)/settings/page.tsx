@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   type CurrencyCode = (typeof currencyOptions)[number]["value"];
+  const didInitCurrency = useRef(false);
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
     queryFn: fetchAccounts
@@ -313,13 +314,15 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    if (profile?.default_currency && profile.default_currency !== defaultCurrency) {
-      setDefaultCurrency(profile.default_currency);
-    }
-  }, [defaultCurrency, profile]);
+    if (!profile?.default_currency) return;
+    if (didInitCurrency.current) return;
+    didInitCurrency.current = true;
+    setDefaultCurrency(profile.default_currency as CurrencyCode);
+  }, [profile?.default_currency]);
 
   const handleCurrencyChange = async (value: string) => {
     if (!user) return;
+    didInitCurrency.current = true;
     setDefaultCurrency(value as CurrencyCode);
     try {
       await upsertProfile({ user_id: user.id, default_currency: value as CurrencyCode });
