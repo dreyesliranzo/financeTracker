@@ -1,0 +1,542 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import Papa from "papaparse";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { AccountForm } from "@/components/forms/AccountForm";
+import { CategoryForm } from "@/components/forms/CategoryForm";
+import { fetchAccounts, fetchBudgets, fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
+import { deleteAccount, deleteCategory } from "@/lib/supabase/mutations";
+import { parseCsv } from "@/lib/csv/parse";
+import { requiredCsvFields, type CsvMapping } from "@/lib/csv/mapping";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { parseCurrencyToCents } from "@/lib/money";
+import { createAccount, createCategory, createTransaction } from "@/lib/supabase/mutations";
+import { supabaseBrowser } from "@/lib/supabase/client";
+
+export default function SettingsPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: fetchAccounts
+  });
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories
+  });
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: () => fetchTransactions()
+  });
+  const { data: budgets = [] } = useQuery({
+    queryKey: ["budgets"],
+    queryFn: () => fetchBudgets()
+  });
+
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
+  const [mapping, setMapping] = useState<CsvMapping>({
+    date: "",
+    amount: "",
+    type: "",
+    category: "",
+    account: "",
+    merchant: "",
+    notes: "",
+    tags: ""
+  });
+  const [isImporting, setIsImporting] = useState(false);
+  const noneOption = "__none__";
+
+  const mappingComplete = useMemo(() => {
+    return requiredCsvFields.every((field) => Boolean(mapping[field]));
+  }, [mapping]);
+
+  const handleCsvFile = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const { headers, data } = await parseCsv(file);
+      setCsvHeaders(headers);
+      setCsvData(data);
+      setMapping({
+        date: "",
+        amount: "",
+        type: "",
+        category: "",
+        account: "",
+        merchant: "",
+        notes: "",
+        tags: ""
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to parse CSV");
+    }
+  };
+
+  const handleImportCsv = async () => {
+    if (!user) return;
+    if (!mappingComplete) {
+      toast.error("Map required fields first");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const categoryMap = new Map(
+        categories.map((category) => [category.name.toLowerCase(), category.id])
+      );
+      const accountMap = new Map(
+        accounts.map((account) => [account.name.toLowerCase(), account.id])
+      );
+
+      const ensureCategory = async (name: string, type: "income" | "expense") => {
+        const key = name.toLowerCase();
+        const existing = categoryMap.get(key);
+        if (existing) return existing;
+        const created = await createCategory(user.id, { name, type });
+        categoryMap.set(key, created.id!);
+        return created.id!;
+      };
+
+      const ensureAccount = async (name: string) => {
+        const key = name.toLowerCase();
+        const existing = accountMap.get(key);
+        if (existing) return existing;
+        const created = await createAccount(user.id, { name, type: "checking" });
+        accountMap.set(key, created.id!);
+        return created.id!;
+      };
+
+      for (const row of csvData) {
+        const dateValue = row[mapping.date];
+        const amountValue = row[mapping.amount];
+        if (!dateValue || !amountValue) continue;
+
+        const amountCents = Math.abs(parseCurrencyToCents(amountValue));
+        const inferredType = amountValue.trim().startsWith("-") ? "expense" : "income";
+        const typeValue = mapping.type
+          ? row[mapping.type]?.toLowerCase()
+          : inferredType;
+        const type = typeValue?.includes("income") ? "income" : "expense";
+
+        const rawCategory = mapping.category ? row[mapping.category] : "";
+        const rawAccount = mapping.account ? row[mapping.account] : "";
+        const categoryName =
+          rawCategory ||
+          (type === "expense" ? "Uncategorized" : "Income");
+        const accountName = rawAccount || "Default";
+
+        const categoryId = await ensureCategory(categoryName, type);
+        const accountId = await ensureAccount(accountName);
+
+        await createTransaction(user.id, {
+          date: dateValue,
+          amount_cents: amountCents,
+          type,
+          category_id: categoryId,
+          account_id: accountId,
+          merchant: mapping.merchant ? row[mapping.merchant] : null,
+          notes: mapping.notes ? row[mapping.notes] : null,
+          tags: mapping.tags
+            ? row[mapping.tags]
+                ?.split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean) ?? []
+            : []
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      toast.success("CSV import complete");
+      setCsvHeaders([]);
+      setCsvData([]);
+    } catch (error) {
+      console.error(error);
+      toast.error("CSV import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    const rows = transactions.map((transaction) => ({
+      date: transaction.date,
+      amount: (transaction.amount_cents / 100).toFixed(2),
+      type: transaction.type,
+      category:
+        categories.find((category) => category.id === transaction.category_id)?.name ??
+        "",
+      account:
+        accounts.find((account) => account.id === transaction.account_id)?.name ??
+        "",
+      merchant: transaction.merchant ?? "",
+      notes: transaction.notes ?? "",
+      tags: transaction.tags?.join(", ") ?? ""
+    }));
+
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ledgerly-transactions.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportJson = () => {
+    const payload = { accounts, categories, transactions, budgets };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ledgerly-backup.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJson = async (file?: File | null) => {
+    if (!user || !file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as {
+        accounts?: Array<Record<string, unknown>>;
+        categories?: Array<Record<string, unknown>>;
+        transactions?: Array<Record<string, unknown>>;
+        budgets?: Array<Record<string, unknown>>;
+      };
+
+      const supabase = supabaseBrowser();
+      if (parsed.accounts?.length) {
+        const { error } = await supabase
+          .from("accounts")
+          .upsert(parsed.accounts.map((item) => ({ ...item, user_id: user.id })));
+        if (error) throw error;
+      }
+      if (parsed.categories?.length) {
+        const { error } = await supabase
+          .from("categories")
+          .upsert(parsed.categories.map((item) => ({ ...item, user_id: user.id })));
+        if (error) throw error;
+      }
+      if (parsed.transactions?.length) {
+        const { error } = await supabase
+          .from("transactions")
+          .upsert(parsed.transactions.map((item) => ({ ...item, user_id: user.id })));
+        if (error) throw error;
+      }
+      if (parsed.budgets?.length) {
+        const { error } = await supabase
+          .from("budgets")
+          .upsert(parsed.budgets.map((item) => ({ ...item, user_id: user.id })));
+        if (error) throw error;
+      }
+
+      queryClient.invalidateQueries();
+      toast.success("Backup restored");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to restore backup");
+    }
+  };
+
+  const deleteWithToast = async (type: "account" | "category", id: string) => {
+    try {
+      if (type === "account") {
+        await deleteAccount(id);
+        queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      } else {
+        await deleteCategory(id);
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+      }
+      toast.success(`${type === "account" ? "Account" : "Category"} deleted`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to delete item");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Customize your workspace and manage data.
+        </p>
+      </div>
+
+      <Tabs defaultValue="categories">
+        <TabsList>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="imports">Import/Export</TabsTrigger>
+          <TabsTrigger value="preferences">Preferences</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="categories">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Categories</CardTitle>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>Add category</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <CategoryForm />
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {categories.map((category) => (
+                <div
+                  key={category.id}
+                  className="flex items-center justify-between rounded-xl border border-border/60 p-3"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {category.icon ? `${category.icon} ` : ""}
+                      {category.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {category.type}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          Edit
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <CategoryForm category={category} />
+                      </DialogContent>
+                    </Dialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete category?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Transactions linked to this category will keep the ID but show as
+                            Uncategorized.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteWithToast("category", category.id!)}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounts">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Accounts</CardTitle>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>Add account</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <AccountForm />
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {accounts.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex items-center justify-between rounded-xl border border-border/60 p-3"
+                >
+                  <div>
+                    <p className="font-medium">{account.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {account.type}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          Edit
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <AccountForm account={account} />
+                      </DialogContent>
+                    </Dialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete account?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Transactions linked to this account will keep the ID but show as
+                            Unknown.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteWithToast("account", account.id!)}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="imports">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>CSV import</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input type="file" accept=".csv" onChange={(event) => handleCsvFile(event.target.files?.[0])} />
+                {csvHeaders.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">Map your columns</p>
+                    {requiredCsvFields.map((field) => (
+                      <div key={field} className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">{field}</p>
+                        <Select
+                          value={mapping[field] ?? ""}
+                          onValueChange={(value) =>
+                            setMapping((prev) => ({ ...prev, [field]: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {csvHeaders.map((header) => (
+                              <SelectItem key={header} value={header}>
+                                {header}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                    <div className="grid gap-2">
+                      {(["type", "category", "account", "merchant", "notes", "tags"] as Array<keyof CsvMapping>).map((field) => (
+                        <div key={field} className="space-y-2">
+                          <p className="text-xs uppercase text-muted-foreground">{field}</p>
+                          <Select
+                            value={mapping[field] ?? ""}
+                            onValueChange={(value) =>
+                              setMapping((prev) => ({
+                                ...prev,
+                                [field]: value === noneOption ? "" : value
+                              }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Optional" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={noneOption}>None</SelectItem>
+                              {csvHeaders.map((header) => (
+                                <SelectItem key={header} value={header}>
+                                  {header}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                    <Button onClick={handleImportCsv} disabled={isImporting}>
+                      {isImporting ? "Importing..." : "Import CSV"}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Upload a CSV file to map columns and import transactions.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Export & backup</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button onClick={handleExportCsv}>Export CSV</Button>
+                <Button variant="secondary" onClick={handleExportJson}>
+                  Download JSON backup
+                </Button>
+                <div>
+                  <p className="text-sm text-muted-foreground">Restore from JSON backup</p>
+                  <Input
+                    type="file"
+                    accept="application/json"
+                    onChange={(event) => handleImportJson(event.target.files?.[0])}
+                    className="mt-2"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="preferences">
+          <Card>
+            <CardHeader>
+              <CardTitle>Preferences</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Theme</p>
+                <p className="text-sm text-muted-foreground">
+                  Toggle between dark and light mode.
+                </p>
+              </div>
+              <ThemeToggle />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

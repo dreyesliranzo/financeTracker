@@ -1,0 +1,2 @@
+-- Optional per-user seed inserts should be triggered from the app.
+-- Keep this file for future curated starter data.
