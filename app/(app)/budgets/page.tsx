@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { toast } from "sonner";
@@ -9,22 +9,30 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { fetchBudgets, fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { deleteBudget } from "@/lib/supabase/mutations";
 import { BudgetForm } from "@/components/forms/BudgetForm";
 import { formatCurrency } from "@/lib/money";
+import { currencyOptions } from "@/lib/money/currencies";
 
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const queryClient = useQueryClient();
   const [year, monthIndex] = month.split("-").map((value) => Number(value));
   const monthDate = new Date(year, monthIndex - 1, 1);
   const rangeStart = format(startOfMonth(monthDate), "yyyy-MM-dd");
   const rangeEnd = format(endOfMonth(monthDate), "yyyy-MM-dd");
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
+
   const { data: budgets = [] } = useQuery({
-    queryKey: ["budgets", month],
-    queryFn: () => fetchBudgets(`${month}-01`)
+    queryKey: ["budgets", month, selectedCurrency],
+    queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
   });
 
   const { data: categories = [] } = useQuery({
@@ -33,9 +41,23 @@ export default function BudgetsPage() {
   });
 
   const { data: transactions = [] } = useQuery({
-    queryKey: ["transactions", rangeStart, rangeEnd],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd })
+    queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
+    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
+
+  useEffect(() => {
+    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
+      setSelectedCurrency(profile.default_currency);
+    }
+  }, [profile, selectedCurrency]);
+
+  const categoryNameMap = useMemo(() => {
+    return new Map(
+      categories
+        .filter((category) => Boolean(category.id))
+        .map((category) => [category.id!, category.name])
+    );
+  }, [categories]);
 
   const budgetsWithProgress = useMemo(() => {
     return budgets.map((budget) => {
@@ -49,13 +71,11 @@ export default function BudgetsPage() {
 
       return {
         ...budget,
-        categoryName:
-          categories.find((category) => category.id === budget.category_id)?.name ??
-          "Uncategorized",
+        categoryName: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
         spent
       };
     });
-  }, [budgets, transactions, categories]);
+  }, [budgets, transactions, categoryNameMap]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -84,6 +104,18 @@ export default function BudgetsPage() {
             onChange={(event) => setMonth(event.target.value)}
             className="w-[170px]"
           />
+          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Dialog>
             <DialogTrigger asChild>
               <Button>Create budget</Button>
@@ -106,7 +138,7 @@ export default function BudgetsPage() {
                 <div>
                   <CardTitle>{budget.categoryName}</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {formatCurrency(budget.spent)} of {formatCurrency(budget.limit_cents)}
+                    {formatCurrency(budget.spent, selectedCurrency)} of {formatCurrency(budget.limit_cents, selectedCurrency)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ export type CsvMapping = {
   type?: string;
   category?: string;
   account?: string;
+  currency?: string;
   merchant?: string;
   notes?: string;
   tags?: string;
@@ -15,6 +16,7 @@ export const csvFieldOptions = [
   "type",
   "category",
   "account",
+  "currency",
   "merchant",
   "notes",
   "tags"

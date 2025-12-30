@@ -1,4 +1,6 @@
 import { TransactionsTable } from "@/components/tables/TransactionsTable";
+import { RecurringTransactionsTable } from "@/components/tables/RecurringTransactionsTable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function TransactionsPage() {
   return (
@@ -9,7 +11,18 @@ export default function TransactionsPage() {
           Search, filter, and manage every entry.
         </p>
       </div>
-      <TransactionsTable />
+      <Tabs defaultValue="transactions">
+        <TabsList>
+          <TabsTrigger value="transactions">All transactions</TabsTrigger>
+          <TabsTrigger value="recurring">Recurring</TabsTrigger>
+        </TabsList>
+        <TabsContent value="transactions">
+          <TransactionsTable />
+        </TabsContent>
+        <TabsContent value="recurring">
+          <RecurringTransactionsTable />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

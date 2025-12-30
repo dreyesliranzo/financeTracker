@@ -1,10 +1,11 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatSignedCurrency } from "@/lib/money";
-import { fetchAccounts, fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
+import { currencyOptions } from "@/lib/money/currencies";
+import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { bulkDeleteTransactions, deleteTransaction } from "@/lib/supabase/mutations";
 import type { Transaction } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -28,20 +29,27 @@ export function TransactionsTable() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sortKey, setSortKey] = useState("date");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [page, setPage] = useState(1);
   const deferredSearch = useDeferredValue(search);
+  const pageSize = 50;
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["transactions", startDate, endDate],
+    queryKey: ["transactions", startDate, endDate, currencyFilter],
     queryFn: () =>
       fetchTransactions({
         start: startDate || undefined,
         end: endDate || undefined
-      })
+      }, currencyFilter === "all" ? undefined : currencyFilter)
+  });
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
   });
 
   const { data: categories = [] } = useQuery({
@@ -82,6 +90,12 @@ export function TransactionsTable() {
         if (accountFilter !== "all" && transaction.account_id !== accountFilter) {
           return false;
         }
+        if (
+          currencyFilter !== "all" &&
+          transaction.currency_code !== currencyFilter
+        ) {
+          return false;
+        }
         if (deferredSearch.trim().length > 0) {
           const query = deferredSearch.toLowerCase();
           const matchMerchant = transaction.merchant?.toLowerCase().includes(query);
@@ -97,7 +111,31 @@ export function TransactionsTable() {
         }
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-  }, [transactions, typeFilter, categoryFilter, accountFilter, deferredSearch, sortKey]);
+  }, [
+    transactions,
+    typeFilter,
+    categoryFilter,
+    accountFilter,
+    currencyFilter,
+    deferredSearch,
+    sortKey
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [deferredSearch, typeFilter, categoryFilter, accountFilter, currencyFilter, startDate, endDate, sortKey]);
+
+  useEffect(() => {
+    if (profile?.default_currency && currencyFilter === "all") {
+      setCurrencyFilter(profile.default_currency);
+    }
+  }, [currencyFilter, profile]);
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -201,6 +239,19 @@ export function TransactionsTable() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Currency" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All currencies</SelectItem>
+              {currencyOptions.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             type="date"
             value={startDate}
@@ -277,11 +328,12 @@ export function TransactionsTable() {
               <TableHead>Account</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Currency</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((transaction) => {
+            {paged.map((transaction) => {
               const categoryName = transaction.category_id
                 ? categoryMap.get(transaction.category_id)
                 : undefined;
@@ -304,8 +356,13 @@ export function TransactionsTable() {
                   <TableCell>{accountName ?? "-"}</TableCell>
                   <TableCell className="capitalize">{transaction.type}</TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatSignedCurrency(transaction.amount_cents, transaction.type)}
+                    {formatSignedCurrency(
+                      transaction.amount_cents,
+                      transaction.type,
+                      transaction.currency_code ?? "USD"
+                    )}
                   </TableCell>
+                  <TableCell>{transaction.currency_code ?? "USD"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
@@ -343,6 +400,34 @@ export function TransactionsTable() {
             })}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <p>
+          Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}-
+          {Math.min(page * pageSize, filtered.length)} of {filtered.length}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={page === 1}
+          >
+            Previous
+          </Button>
+          <span className="text-xs">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={page === totalPages}
+          >
+            Next
+          </Button>
+        </div>
       </div>
 
       <Dialog

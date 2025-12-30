@@ -8,7 +8,13 @@ export type BudgetProgressItem = {
   limit: number;
 };
 
-export function BudgetProgressList({ items }: { items: BudgetProgressItem[] }) {
+export function BudgetProgressList({
+  items,
+  currencyCode = "USD"
+}: {
+  items: BudgetProgressItem[];
+  currencyCode?: string;
+}) {
   return (
     <div className="space-y-4">
       {items.map((item) => {
@@ -22,7 +28,7 @@ export function BudgetProgressList({ items }: { items: BudgetProgressItem[] }) {
               <Badge
                 variant={over ? "warning" : warning ? "secondary" : "outline"}
               >
-                {formatCurrency(item.spent)} / {formatCurrency(item.limit)}
+                {formatCurrency(item.spent, currencyCode)} / {formatCurrency(item.limit, currencyCode)}
               </Badge>
             </div>
             <div className="h-2 w-full rounded-full bg-muted/40">

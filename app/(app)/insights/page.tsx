@@ -1,28 +1,50 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
+import { currencyOptions } from "@/lib/money/currencies";
 
 export default function InsightsPage() {
   const currentMonth = new Date();
   const previousMonth = subMonths(currentMonth, 1);
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
 
   const rangeStart = format(startOfMonth(previousMonth), "yyyy-MM-dd");
   const rangeEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
+
   const { data: transactions = [] } = useQuery({
-    queryKey: ["transactions", rangeStart, rangeEnd],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd })
+    queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
+    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
+
+  useEffect(() => {
+    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
+      setSelectedCurrency(profile.default_currency);
+    }
+  }, [profile, selectedCurrency]);
+
+  const categoryNameMap = useMemo(() => {
+    return new Map(
+      categories
+        .filter((category) => Boolean(category.id))
+        .map((category) => [category.id!, category.name])
+    );
+  }, [categories]);
 
   const { current, previous } = useMemo(() => {
     const currentKey = format(currentMonth, "yyyy-MM");
@@ -72,14 +94,12 @@ export default function InsightsPage() {
 
     return Array.from(totalsByCategory.entries())
       .map(([categoryId, amount]) => ({
-        category:
-          categories.find((category) => category.id === categoryId)?.name ??
-          "Uncategorized",
+        category: categoryNameMap.get(categoryId) ?? "Uncategorized",
         amount
       }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
-  }, [current, categories]);
+  }, [current, categoryNameMap]);
 
   const topMerchants = useMemo(() => {
     const totalsByMerchant = new Map<string, number>();
@@ -124,6 +144,20 @@ export default function InsightsPage() {
           Month-over-month comparisons and spending patterns.
         </p>
       </div>
+      <div className="flex justify-end">
+        <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Currency" />
+          </SelectTrigger>
+          <SelectContent>
+            {currencyOptions.map((currency) => (
+              <SelectItem key={currency.value} value={currency.value}>
+                {currency.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -132,7 +166,7 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold">
-              {formatCurrency(incomeDelta)}
+              {formatCurrency(incomeDelta, selectedCurrency)}
             </p>
             <p className="text-sm text-muted-foreground">
               vs {format(previousMonth, "MMMM")}
@@ -145,7 +179,7 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold">
-              {formatCurrency(expenseDelta)}
+              {formatCurrency(expenseDelta, selectedCurrency)}
             </p>
             <p className="text-sm text-muted-foreground">
               vs {format(previousMonth, "MMMM")}
@@ -163,7 +197,9 @@ export default function InsightsPage() {
             {topCategories.map((item) => (
               <div key={item.category} className="flex items-center justify-between text-sm">
                 <span>{item.category}</span>
-                <span className="font-medium">{formatCurrency(item.amount)}</span>
+                <span className="font-medium">
+                  {formatCurrency(item.amount, selectedCurrency)}
+                </span>
               </div>
             ))}
           </CardContent>
@@ -176,7 +212,9 @@ export default function InsightsPage() {
             {topMerchants.map((item) => (
               <div key={item.merchant} className="flex items-center justify-between text-sm">
                 <span>{item.merchant}</span>
-                <span className="font-medium">{formatCurrency(item.amount)}</span>
+                <span className="font-medium">
+                  {formatCurrency(item.amount, selectedCurrency)}
+                </span>
               </div>
             ))}
           </CardContent>
@@ -192,7 +230,7 @@ export default function InsightsPage() {
             <div key={item.day} className="rounded-xl border border-border/60 p-3 text-center">
               <p className="text-xs text-muted-foreground">{item.day}</p>
               <p className="mt-2 text-sm font-semibold">
-                {formatCurrency(item.amount)}
+                {formatCurrency(item.amount, selectedCurrency)}
               </p>
             </div>
           ))}

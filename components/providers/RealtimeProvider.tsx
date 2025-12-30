@@ -20,7 +20,14 @@ type SyncContextValue = {
 
 const SyncContext = createContext<SyncContextValue>({ status: "offline" });
 
-const TABLES = ["transactions", "accounts", "categories", "budgets"] as const;
+const TABLES = [
+  "transactions",
+  "accounts",
+  "categories",
+  "budgets",
+  "recurring_transactions",
+  "goals"
+] as const;
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -51,8 +58,6 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: [table] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-          queryClient.invalidateQueries({ queryKey: ["insights"] });
         }
       );
     });

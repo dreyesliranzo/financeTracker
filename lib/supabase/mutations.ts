@@ -1,5 +1,13 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
-import type { Account, Budget, Category, Transaction } from "@/types";
+import type {
+  Account,
+  Budget,
+  Category,
+  Goal,
+  Profile,
+  RecurringTransaction,
+  Transaction
+} from "@/types";
 
 export async function createAccount(
   userId: string,
@@ -147,4 +155,88 @@ export async function updateBudget(
 export async function deleteBudget(id: string) {
   const { error } = await supabaseBrowser().from("budgets").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function createRecurringTransaction(
+  userId: string,
+  values: Omit<RecurringTransaction, "id" | "user_id" | "created_at" | "updated_at">
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("recurring_transactions")
+    .insert({ ...values, user_id: userId })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as RecurringTransaction;
+}
+
+export async function updateRecurringTransaction(
+  id: string,
+  values: Partial<Omit<RecurringTransaction, "id" | "user_id" | "created_at" | "updated_at">>
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("recurring_transactions")
+    .update(values)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as RecurringTransaction;
+}
+
+export async function deleteRecurringTransaction(id: string) {
+  const { error } = await supabaseBrowser()
+    .from("recurring_transactions")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function createGoal(
+  userId: string,
+  values: Omit<Goal, "id" | "user_id" | "created_at" | "updated_at">
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("goals")
+    .insert({ ...values, user_id: userId })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Goal;
+}
+
+export async function updateGoal(
+  id: string,
+  values: Partial<Omit<Goal, "id" | "user_id" | "created_at" | "updated_at">>
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("goals")
+    .update(values)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Goal;
+}
+
+export async function deleteGoal(id: string) {
+  const { error } = await supabaseBrowser().from("goals").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function upsertProfile(
+  values: Partial<Omit<Profile, "user_id">> & Pick<Profile, "user_id">
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("profiles")
+    .upsert(values)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Profile;
 }

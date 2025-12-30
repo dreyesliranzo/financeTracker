@@ -1,10 +1,10 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 const defaultAccounts = [
-  { name: "Checking", type: "checking" },
-  { name: "Savings", type: "savings" },
-  { name: "Credit Card", type: "credit" },
-  { name: "Cash", type: "cash" }
+  { name: "Checking", type: "checking", currency_code: "USD" },
+  { name: "Savings", type: "savings", currency_code: "USD" },
+  { name: "Credit Card", type: "credit", currency_code: "USD" },
+  { name: "Cash", type: "cash", currency_code: "USD" }
 ] as const;
 
 const defaultCategories = [
@@ -44,6 +44,14 @@ export async function ensureDefaultData(userId: string) {
       .from("categories")
       .insert(defaultCategories.map((item) => ({ ...item, user_id: userId })));
     if (!error) didInsert = true;
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .upsert({ user_id: userId });
+
+  if (!profileError) {
+    didInsert = true;
   }
 
   return didInsert;

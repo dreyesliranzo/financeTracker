@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
@@ -14,12 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { AccountForm } from "@/components/forms/AccountForm";
 import { CategoryForm } from "@/components/forms/CategoryForm";
-import { fetchAccounts, fetchBudgets, fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
-import { deleteAccount, deleteCategory } from "@/lib/supabase/mutations";
+import { fetchAccounts, fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import { deleteAccount, deleteCategory, upsertProfile } from "@/lib/supabase/mutations";
 import { parseCsv } from "@/lib/csv/parse";
 import { requiredCsvFields, type CsvMapping } from "@/lib/csv/mapping";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { parseCurrencyToCents } from "@/lib/money";
+import { currencyOptions } from "@/lib/money/currencies";
 import { createAccount, createCategory, createTransaction } from "@/lib/supabase/mutations";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -42,6 +43,10 @@ export default function SettingsPage() {
     queryKey: ["budgets"],
     queryFn: () => fetchBudgets()
   });
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
 
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
@@ -51,16 +56,34 @@ export default function SettingsPage() {
     type: "",
     category: "",
     account: "",
+    currency: "",
     merchant: "",
     notes: "",
     tags: ""
   });
   const [isImporting, setIsImporting] = useState(false);
+  const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const noneOption = "__none__";
 
   const mappingComplete = useMemo(() => {
     return requiredCsvFields.every((field) => Boolean(mapping[field]));
   }, [mapping]);
+
+  const categoryNameMap = useMemo(() => {
+    return new Map(
+      categories
+        .filter((category) => Boolean(category.id))
+        .map((category) => [category.id!, category.name])
+    );
+  }, [categories]);
+
+  const accountNameMap = useMemo(() => {
+    return new Map(
+      accounts
+        .filter((account) => Boolean(account.id))
+        .map((account) => [account.id!, account.name])
+    );
+  }, [accounts]);
 
   const handleCsvFile = async (file?: File | null) => {
     if (!file) return;
@@ -74,6 +97,7 @@ export default function SettingsPage() {
         type: "",
         category: "",
         account: "",
+        currency: "",
         merchant: "",
         notes: "",
         tags: ""
@@ -113,10 +137,18 @@ export default function SettingsPage() {
         const key = name.toLowerCase();
         const existing = accountMap.get(key);
         if (existing) return existing;
-        const created = await createAccount(user.id, { name, type: "checking" });
+        const created = await createAccount(user.id, {
+          name,
+          type: "checking",
+          currency_code: defaultCurrency
+        });
         accountMap.set(key, created.id!);
         return created.id!;
       };
+
+      const currencyLookup = new Set(
+        currencyOptions.map((currency) => currency.value.toUpperCase())
+      );
 
       for (const row of csvData) {
         const dateValue = row[mapping.date];
@@ -139,6 +171,12 @@ export default function SettingsPage() {
 
         const categoryId = await ensureCategory(categoryName, type);
         const accountId = await ensureAccount(accountName);
+        const currencyValue = mapping.currency
+          ? row[mapping.currency]?.toUpperCase()
+          : defaultCurrency;
+        const currencyCode = currencyLookup.has(currencyValue)
+          ? currencyValue
+          : defaultCurrency;
 
         await createTransaction(user.id, {
           date: dateValue,
@@ -146,6 +184,7 @@ export default function SettingsPage() {
           type,
           category_id: categoryId,
           account_id: accountId,
+          currency_code: currencyCode,
           merchant: mapping.merchant ? row[mapping.merchant] : null,
           notes: mapping.notes ? row[mapping.notes] : null,
           tags: mapping.tags
@@ -176,12 +215,13 @@ export default function SettingsPage() {
       date: transaction.date,
       amount: (transaction.amount_cents / 100).toFixed(2),
       type: transaction.type,
-      category:
-        categories.find((category) => category.id === transaction.category_id)?.name ??
-        "",
-      account:
-        accounts.find((account) => account.id === transaction.account_id)?.name ??
-        "",
+      category: transaction.category_id
+        ? categoryNameMap.get(transaction.category_id) ?? ""
+        : "",
+      account: transaction.account_id
+        ? accountNameMap.get(transaction.account_id) ?? ""
+        : "",
+      currency: transaction.currency_code ?? "USD",
       merchant: transaction.merchant ?? "",
       notes: transaction.notes ?? "",
       tags: transaction.tags?.join(", ") ?? ""
@@ -268,6 +308,25 @@ export default function SettingsPage() {
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete item");
+    }
+  };
+
+  useEffect(() => {
+    if (profile?.default_currency && profile.default_currency !== defaultCurrency) {
+      setDefaultCurrency(profile.default_currency);
+    }
+  }, [defaultCurrency, profile]);
+
+  const handleCurrencyChange = async (value: string) => {
+    if (!user) return;
+    setDefaultCurrency(value);
+    try {
+      await upsertProfile({ user_id: user.id, default_currency: value });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Default currency updated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to update currency");
     }
   };
 
@@ -380,7 +439,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="font-medium">{account.name}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                      {account.type}
+                      {account.type} • {account.currency_code ?? "USD"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -459,7 +518,7 @@ export default function SettingsPage() {
                       </div>
                     ))}
                     <div className="grid gap-2">
-                      {(["type", "category", "account", "merchant", "notes", "tags"] as Array<keyof CsvMapping>).map((field) => (
+                      {(["type", "category", "account", "currency", "merchant", "notes", "tags"] as Array<keyof CsvMapping>).map((field) => (
                         <div key={field} className="space-y-2">
                           <p className="text-xs uppercase text-muted-foreground">{field}</p>
                           <Select
@@ -525,14 +584,36 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Preferences</CardTitle>
             </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Theme</p>
-                <p className="text-sm text-muted-foreground">
-                  Toggle between dark and light mode.
-                </p>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Theme</p>
+                  <p className="text-sm text-muted-foreground">
+                    Toggle between dark and light mode.
+                  </p>
+                </div>
+                <ThemeToggle />
               </div>
-              <ThemeToggle />
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Default currency</p>
+                  <p className="text-sm text-muted-foreground">
+                    Applied to new accounts, budgets, and transactions.
+                  </p>
+                </div>
+                <Select value={defaultCurrency} onValueChange={handleCurrencyChange}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencyOptions.map((currency) => (
+                      <SelectItem key={currency.value} value={currency.value}>
+                        {currency.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

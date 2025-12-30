@@ -4,10 +4,12 @@ import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { accountSchema, type Account } from "@/types";
 import { createAccount, updateAccount } from "@/lib/supabase/mutations";
+import { fetchProfile } from "@/lib/supabase/queries";
+import { currencyOptions } from "@/lib/money/currencies";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,15 +34,28 @@ export function AccountForm({
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const accountFormSchema = accountSchema.pick({ name: true, type: true });
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
+  const accountFormSchema = accountSchema.pick({
+    name: true,
+    type: true,
+    currency_code: true
+  });
   type AccountFormValues = z.infer<typeof accountFormSchema>;
+  const defaultCurrency = profile?.default_currency ?? "USD";
 
   const defaultValues = useMemo<AccountFormValues>(() => {
     if (!account) {
-      return { name: "", type: "checking" };
+      return { name: "", type: "checking", currency_code: defaultCurrency };
     }
-    return { name: account.name, type: account.type };
-  }, [account]);
+    return {
+      name: account.name,
+      type: account.type,
+      currency_code: account.currency_code ?? "USD"
+    };
+  }, [account, defaultCurrency]);
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -90,6 +105,26 @@ export function AccountForm({
             {accountTypes.map((type) => (
               <SelectItem key={type.value} value={type.value}>
                 {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Currency</Label>
+        <Select
+          value={form.watch("currency_code")}
+          onValueChange={(value) =>
+            form.setValue("currency_code", value as AccountFormValues["currency_code"])
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select currency" />
+          </SelectTrigger>
+          <SelectContent>
+            {currencyOptions.map((currency) => (
+              <SelectItem key={currency.value} value={currency.value}>
+                {currency.label}
               </SelectItem>
             ))}
           </SelectContent>

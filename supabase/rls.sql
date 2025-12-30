@@ -3,6 +3,8 @@ alter table categories enable row level security;
 alter table transactions enable row level security;
 alter table budgets enable row level security;
 alter table profiles enable row level security;
+alter table recurring_transactions enable row level security;
+alter table goals enable row level security;
 
 create policy "Accounts are viewable by owner" on accounts
   for select using (auth.uid() = user_id);
@@ -47,4 +49,22 @@ create policy "Profiles insert by owner" on profiles
 create policy "Profiles update by owner" on profiles
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Profiles delete by owner" on profiles
+  for delete using (auth.uid() = user_id);
+
+create policy "Recurring viewable by owner" on recurring_transactions
+  for select using (auth.uid() = user_id);
+create policy "Recurring insert by owner" on recurring_transactions
+  for insert with check (auth.uid() = user_id);
+create policy "Recurring update by owner" on recurring_transactions
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Recurring delete by owner" on recurring_transactions
+  for delete using (auth.uid() = user_id);
+
+create policy "Goals viewable by owner" on goals
+  for select using (auth.uid() = user_id);
+create policy "Goals insert by owner" on goals
+  for insert with check (auth.uid() = user_id);
+create policy "Goals update by owner" on goals
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Goals delete by owner" on goals
   for delete using (auth.uid() = user_id);

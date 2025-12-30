@@ -1,26 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { fetchBudgets, fetchCategories, fetchTransactions } from "@/lib/supabase/queries";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
+import { currencyOptions } from "@/lib/money/currencies";
 import { ExpenseByCategoryChart } from "@/components/charts/ExpenseByCategoryChart";
 import { CashflowChart } from "@/components/charts/CashflowChart";
 import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const [year, monthIndex] = month.split("-").map((value) => Number(value));
   const monthDate = new Date(year, monthIndex - 1, 1);
   const rangeStart = format(startOfMonth(monthDate), "yyyy-MM-dd");
   const rangeEnd = format(endOfMonth(monthDate), "yyyy-MM-dd");
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
+
   const { data: transactions = [] } = useQuery({
-    queryKey: ["transactions", rangeStart, rangeEnd],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd })
+    queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
+    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
 
   const { data: categories = [] } = useQuery({
@@ -29,12 +37,32 @@ export default function DashboardPage() {
   });
 
   const { data: budgets = [] } = useQuery({
-    queryKey: ["budgets", month],
-    queryFn: () => fetchBudgets(`${month}-01`)
+    queryKey: ["budgets", month, selectedCurrency],
+    queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
   });
 
+  useEffect(() => {
+    if (profile?.default_currency && profile.default_currency !== selectedCurrency) {
+      setSelectedCurrency(profile.default_currency);
+    }
+  }, [profile, selectedCurrency]);
+
+  const categoryNameMap = useMemo(() => {
+    return new Map(
+      categories
+        .filter((category) => Boolean(category.id))
+        .map((category) => [category.id!, category.name])
+    );
+  }, [categories]);
+
+  const scopedTransactions = useMemo(() => {
+    return transactions.filter(
+      (transaction) => transaction.currency_code === selectedCurrency
+    );
+  }, [selectedCurrency, transactions]);
+
   const { income, expense, net } = useMemo(() => {
-    return transactions.reduce(
+    return scopedTransactions.reduce(
       (acc, transaction) => {
         if (transaction.type === "income") {
           acc.income += transaction.amount_cents;
@@ -46,7 +74,7 @@ export default function DashboardPage() {
       },
       { income: 0, expense: 0, net: 0 }
     );
-  }, [transactions]);
+  }, [scopedTransactions]);
 
   const remainingBudget = useMemo(() => {
     const totalLimit = budgets.reduce((sum, budget) => sum + budget.limit_cents, 0);
@@ -55,7 +83,7 @@ export default function DashboardPage() {
 
   const expenseByCategory = useMemo(() => {
     const totals = new Map<string, number>();
-    transactions
+    scopedTransactions
       .filter((transaction) => transaction.type === "expense")
       .forEach((transaction) => {
         const key = transaction.category_id ?? "uncategorized";
@@ -64,16 +92,16 @@ export default function DashboardPage() {
 
     return Array.from(totals.entries())
       .map(([categoryId, value]) => ({
-        name: categories.find((cat) => cat.id === categoryId)?.name ?? "Uncategorized",
+        name: categoryNameMap.get(categoryId) ?? "Uncategorized",
         value: Math.round(value / 100)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [transactions, categories]);
+  }, [categoryNameMap, scopedTransactions]);
 
   const cashflowData = useMemo(() => {
     const byDate = new Map<string, { income: number; expense: number }>();
-    transactions.forEach((transaction) => {
+    scopedTransactions.forEach((transaction) => {
       if (!byDate.has(transaction.date)) {
         byDate.set(transaction.date, { income: 0, expense: 0 });
       }
@@ -88,11 +116,11 @@ export default function DashboardPage() {
     return Array.from(byDate.entries())
       .map(([date, values]) => ({ date, ...values }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [transactions]);
+  }, [scopedTransactions]);
 
   const budgetProgress = useMemo(() => {
     return budgets.map((budget) => {
-      const spent = transactions
+      const spent = scopedTransactions
         .filter(
           (transaction) =>
             transaction.type === "expense" &&
@@ -101,14 +129,12 @@ export default function DashboardPage() {
         .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
 
       return {
-        category:
-          categories.find((cat) => cat.id === budget.category_id)?.name ??
-          "Uncategorized",
+        category: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
         spent,
         limit: budget.limit_cents
       };
     });
-  }, [budgets, transactions, categories]);
+  }, [budgets, scopedTransactions, categoryNameMap]);
 
   return (
     <div className="space-y-8">
@@ -119,12 +145,26 @@ export default function DashboardPage() {
             Track your month at a glance.
           </p>
         </div>
-        <Input
-          type="month"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-          className="w-[170px]"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="w-[170px]"
+          />
+          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -133,7 +173,9 @@ export default function DashboardPage() {
             <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold">{formatCurrency(net)}</div>
+            <div className="text-2xl font-semibold">
+              {formatCurrency(net, selectedCurrency)}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -142,7 +184,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-emerald-400">
-              {formatCurrency(income)}
+              {formatCurrency(income, selectedCurrency)}
             </div>
           </CardContent>
         </Card>
@@ -152,7 +194,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-rose-400">
-              {formatCurrency(expense)}
+              {formatCurrency(expense, selectedCurrency)}
             </div>
           </CardContent>
         </Card>
@@ -164,7 +206,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold">
-              {formatCurrency(remainingBudget)}
+              {formatCurrency(remainingBudget, selectedCurrency)}
             </div>
           </CardContent>
         </Card>
@@ -195,7 +237,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {budgetProgress.length > 0 ? (
-            <BudgetProgressList items={budgetProgress} />
+            <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
           ) : (
             <p className="text-sm text-muted-foreground">
               Set a budget to track your progress.

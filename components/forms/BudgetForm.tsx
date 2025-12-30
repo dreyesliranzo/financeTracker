@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { budgetFormSchema, type Budget, type BudgetFormValues } from "@/types";
 import { parseCurrencyToCents } from "@/lib/money";
-import { fetchCategories } from "@/lib/supabase/queries";
+import { currencyOptions } from "@/lib/money/currencies";
+import { fetchCategories, fetchProfile } from "@/lib/supabase/queries";
 import { createBudget, updateBudget } from "@/lib/supabase/mutations";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -29,22 +30,29 @@ export function BudgetForm({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile
+  });
+  const defaultCurrency = profile?.default_currency ?? "USD";
 
   const defaultValues = useMemo<BudgetFormValues>(() => {
     if (!budget) {
       return {
         month: new Date().toISOString().slice(0, 7),
         category_id: "",
-        limit: ""
+        limit: "",
+        currency_code: defaultCurrency
       };
     }
 
     return {
       month: budget.month.slice(0, 7),
       category_id: budget.category_id,
-      limit: (budget.limit_cents / 100).toFixed(2)
+      limit: (budget.limit_cents / 100).toFixed(2),
+      currency_code: budget.currency_code ?? "USD"
     };
-  }, [budget]);
+  }, [budget, defaultCurrency]);
 
   const form = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
@@ -61,7 +69,8 @@ export function BudgetForm({
     const payload = {
       month: `${values.month}-01`,
       category_id: values.category_id,
-      limit_cents: Math.abs(parseCurrencyToCents(values.limit))
+      limit_cents: Math.abs(parseCurrencyToCents(values.limit)),
+      currency_code: values.currency_code
     };
 
     try {
@@ -118,6 +127,24 @@ export function BudgetForm({
         <div className="space-y-2">
           <Label htmlFor="limit">Limit</Label>
           <Input id="limit" placeholder="0.00" {...form.register("limit")} />
+        </div>
+        <div className="space-y-2">
+          <Label>Currency</Label>
+          <Select
+            value={form.watch("currency_code")}
+            onValueChange={(value) => form.setValue("currency_code", value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

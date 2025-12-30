@@ -1,5 +1,13 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
-import type { Account, Budget, Category, Transaction } from "@/types";
+import type {
+  Account,
+  Budget,
+  Category,
+  Goal,
+  Profile,
+  RecurringTransaction,
+  Transaction
+} from "@/types";
 
 type DateRange = {
   start?: string;
@@ -26,7 +34,7 @@ export async function fetchCategories() {
   return (data ?? []) as Category[];
 }
 
-export async function fetchTransactions(range?: DateRange) {
+export async function fetchTransactions(range?: DateRange, currencyCode?: string) {
   let query = supabaseBrowser()
     .from("transactions")
     .select("*")
@@ -40,12 +48,16 @@ export async function fetchTransactions(range?: DateRange) {
     query = query.lte("date", range.end);
   }
 
+  if (currencyCode) {
+    query = query.eq("currency_code", currencyCode);
+  }
+
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Transaction[];
 }
 
-export async function fetchBudgets(month?: string) {
+export async function fetchBudgets(month?: string, currencyCode?: string) {
   let query = supabaseBrowser()
     .from("budgets")
     .select("*")
@@ -55,7 +67,46 @@ export async function fetchBudgets(month?: string) {
     query = query.eq("month", month);
   }
 
+  if (currencyCode) {
+    query = query.eq("currency_code", currencyCode);
+  }
+
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Budget[];
+}
+
+export async function fetchRecurringTransactions() {
+  const { data, error } = await supabaseBrowser()
+    .from("recurring_transactions")
+    .select("*")
+    .order("next_run", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as RecurringTransaction[];
+}
+
+export async function fetchGoals(currencyCode?: string) {
+  let query = supabaseBrowser()
+    .from("goals")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (currencyCode) {
+    query = query.eq("currency_code", currencyCode);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Goal[];
+}
+
+export async function fetchProfile() {
+  const { data, error } = await supabaseBrowser()
+    .from("profiles")
+    .select("*")
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return (data ?? null) as Profile | null;
 }
