@@ -165,7 +165,7 @@ export function TransactionsTable() {
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
               {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
+                <SelectItem key={category.id!} value={category.id!}>
                   {category.name}
                 </SelectItem>
               ))}
@@ -178,7 +178,7 @@ export function TransactionsTable() {
             <SelectContent>
               <SelectItem value="all">All accounts</SelectItem>
               {accounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
+                <SelectItem key={account.id!} value={account.id!}>
                   {account.name}
                 </SelectItem>
               ))}

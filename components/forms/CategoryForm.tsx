@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { categorySchema, type Category } from "@/types";
 import { createCategory, updateCategory } from "@/lib/supabase/mutations";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -22,15 +23,18 @@ export function CategoryForm({
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const defaultValues = useMemo(() => {
+  const categoryFormSchema = categorySchema.pick({ name: true, type: true, icon: true });
+  type CategoryFormValues = z.infer<typeof categoryFormSchema>;
+
+  const defaultValues = useMemo<CategoryFormValues>(() => {
     if (!category) {
       return { name: "", type: "expense", icon: "" };
     }
     return { name: category.name, type: category.type, icon: category.icon ?? "" };
   }, [category]);
 
-  const form = useForm({
-    resolver: zodResolver(categorySchema.pick({ name: true, type: true, icon: true })),
+  const form = useForm<CategoryFormValues>({
+    resolver: zodResolver(categoryFormSchema),
     defaultValues
   });
 
@@ -66,7 +70,9 @@ export function CategoryForm({
         <Label>Type</Label>
         <Select
           value={form.watch("type")}
-          onValueChange={(value) => form.setValue("type", value)}
+          onValueChange={(value) =>
+            form.setValue("type", value as CategoryFormValues["type"])
+          }
         >
           <SelectTrigger>
             <SelectValue placeholder="Select type" />

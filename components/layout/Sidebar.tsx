@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,7 +18,7 @@ const navItems = [
   { href: "/budgets", label: "Budgets", icon: Wallet },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings }
-];
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -43,7 +44,7 @@ export function Sidebar() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={item.href as Route}
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition",
                 active

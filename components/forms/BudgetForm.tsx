@@ -108,7 +108,7 @@ export function BudgetForm({
               {categories
                 .filter((category) => category.type === "expense")
                 .map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
+                  <SelectItem key={category.id!} value={category.id!}>
                     {category.name}
                   </SelectItem>
                 ))}

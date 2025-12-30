@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { accountSchema, type Account } from "@/types";
 import { createAccount, updateAccount } from "@/lib/supabase/mutations";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -31,15 +32,18 @@ export function AccountForm({
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const defaultValues = useMemo(() => {
+  const accountFormSchema = accountSchema.pick({ name: true, type: true });
+  type AccountFormValues = z.infer<typeof accountFormSchema>;
+
+  const defaultValues = useMemo<AccountFormValues>(() => {
     if (!account) {
       return { name: "", type: "checking" };
     }
     return { name: account.name, type: account.type };
   }, [account]);
 
-  const form = useForm({
-    resolver: zodResolver(accountSchema.pick({ name: true, type: true })),
+  const form = useForm<AccountFormValues>({
+    resolver: zodResolver(accountFormSchema),
     defaultValues
   });
 
@@ -75,7 +79,9 @@ export function AccountForm({
         <Label>Type</Label>
         <Select
           value={form.watch("type")}
-          onValueChange={(value) => form.setValue("type", value)}
+          onValueChange={(value) =>
+            form.setValue("type", value as AccountFormValues["type"])
+          }
         >
           <SelectTrigger>
             <SelectValue placeholder="Select type" />

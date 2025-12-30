@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Plus } from "lucide-react";
@@ -28,7 +29,7 @@ const navItems = [
   { href: "/budgets", label: "Budgets" },
   { href: "/insights", label: "Insights" },
   { href: "/settings", label: "Settings" }
-];
+] as const;
 
 const titleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -62,7 +63,7 @@ export function Topbar() {
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
+                    href={item.href as Route}
                     className={cn(
                       "rounded-xl px-3 py-2 text-sm",
                       active
