@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatSignedCurrency } from "@/lib/money";
@@ -33,6 +33,7 @@ export function TransactionsTable() {
   const [sortKey, setSortKey] = useState("date");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const deferredSearch = useDeferredValue(search);
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["transactions", startDate, endDate],
@@ -53,6 +54,22 @@ export function TransactionsTable() {
     queryFn: fetchAccounts
   });
 
+  const categoryMap = useMemo(() => {
+    return new Map(
+      categories
+        .filter((category) => Boolean(category.id))
+        .map((category) => [category.id!, category.name])
+    );
+  }, [categories]);
+
+  const accountMap = useMemo(() => {
+    return new Map(
+      accounts
+        .filter((account) => Boolean(account.id))
+        .map((account) => [account.id!, account.name])
+    );
+  }, [accounts]);
+
   const filtered = useMemo(() => {
     return transactions
       .filter((transaction) => {
@@ -65,8 +82,8 @@ export function TransactionsTable() {
         if (accountFilter !== "all" && transaction.account_id !== accountFilter) {
           return false;
         }
-        if (search.trim().length > 0) {
-          const query = search.toLowerCase();
+        if (deferredSearch.trim().length > 0) {
+          const query = deferredSearch.toLowerCase();
           const matchMerchant = transaction.merchant?.toLowerCase().includes(query);
           const matchNotes = transaction.notes?.toLowerCase().includes(query);
           const matchTags = transaction.tags?.some((tag) => tag.toLowerCase().includes(query));
@@ -80,7 +97,7 @@ export function TransactionsTable() {
         }
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-  }, [transactions, typeFilter, categoryFilter, accountFilter, search, sortKey]);
+  }, [transactions, typeFilter, categoryFilter, accountFilter, deferredSearch, sortKey]);
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -265,12 +282,12 @@ export function TransactionsTable() {
           </TableHeader>
           <TableBody>
             {filtered.map((transaction) => {
-              const category = categories.find(
-                (item) => item.id === transaction.category_id
-              );
-              const account = accounts.find(
-                (item) => item.id === transaction.account_id
-              );
+              const categoryName = transaction.category_id
+                ? categoryMap.get(transaction.category_id)
+                : undefined;
+              const accountName = transaction.account_id
+                ? accountMap.get(transaction.account_id)
+                : undefined;
               return (
                 <TableRow key={transaction.id}>
                   <TableCell>
@@ -283,8 +300,8 @@ export function TransactionsTable() {
                   </TableCell>
                   <TableCell>{transaction.date}</TableCell>
                   <TableCell>{transaction.merchant ?? "-"}</TableCell>
-                  <TableCell>{category?.name ?? "-"}</TableCell>
-                  <TableCell>{account?.name ?? "-"}</TableCell>
+                  <TableCell>{categoryName ?? "-"}</TableCell>
+                  <TableCell>{accountName ?? "-"}</TableCell>
                   <TableCell className="capitalize">{transaction.type}</TableCell>
                   <TableCell className="text-right font-medium">
                     {formatSignedCurrency(transaction.amount_cents, transaction.type)}

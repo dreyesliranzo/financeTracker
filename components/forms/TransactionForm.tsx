@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -180,6 +182,14 @@ export function TransactionForm({
               ))}
             </SelectContent>
           </Select>
+          {categories.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No categories yet.{" "}
+              <Link href={"/settings" as Route} className="text-primary">
+                Add categories in Settings.
+              </Link>
+            </p>
+          ) : null}
           {form.formState.errors.category_id ? (
             <p className="text-xs text-destructive">
               {form.formState.errors.category_id.message}
@@ -203,6 +213,14 @@ export function TransactionForm({
               ))}
             </SelectContent>
           </Select>
+          {accounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No accounts yet.{" "}
+              <Link href={"/settings" as Route} className="text-primary">
+                Add accounts in Settings.
+              </Link>
+            </p>
+          ) : null}
           {form.formState.errors.account_id ? (
             <p className="text-xs text-destructive">
               {form.formState.errors.account_id.message}

@@ -6,6 +6,7 @@ import { ReactNode, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { RealtimeProvider } from "@/components/providers/RealtimeProvider";
+import { BootstrapProvider } from "@/components/providers/BootstrapProvider";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -24,7 +25,9 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RealtimeProvider>{children}</RealtimeProvider>
+          <BootstrapProvider>
+            <RealtimeProvider>{children}</RealtimeProvider>
+          </BootstrapProvider>
         </AuthProvider>
         <Toaster richColors />
       </QueryClientProvider>
