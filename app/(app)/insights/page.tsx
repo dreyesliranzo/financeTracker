@@ -2,21 +2,36 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
+import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
+import { NetTrendChart } from "@/components/charts/NetTrendChart";
 
 export default function InsightsPage() {
-  const currentMonth = new Date();
-  const previousMonth = subMonths(currentMonth, 1);
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const didSelectCurrency = useRef(false);
+  const [rangeStart, setRangeStart] = useState(
+    format(subDays(new Date(), 30), "yyyy-MM-dd")
+  );
+  const [rangeEnd, setRangeEnd] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const rangeStart = format(startOfMonth(previousMonth), "yyyy-MM-dd");
-  const rangeEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  const rangeStartDate = parseISO(rangeStart);
+  const rangeEndDate = parseISO(rangeEnd);
+  const dayCount = Math.max(
+    1,
+    differenceInCalendarDays(rangeEndDate, rangeStartDate) + 1
+  );
+  const previousStartDate = subDays(rangeStartDate, dayCount);
+  const previousEndDate = subDays(rangeStartDate, 1);
+  const previousStart = format(previousStartDate, "yyyy-MM-dd");
+  const previousEnd = format(previousEndDate, "yyyy-MM-dd");
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -24,8 +39,12 @@ export default function InsightsPage() {
   });
 
   const { data: transactions = [] } = useQuery({
-    queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
+    queryKey: ["transactions", previousStart, rangeEnd, selectedCurrency],
+    queryFn: () =>
+      fetchTransactions(
+        { start: previousStart, end: rangeEnd },
+        selectedCurrency
+      )
   });
 
   const { data: categories = [] } = useQuery({
@@ -48,18 +67,17 @@ export default function InsightsPage() {
   }, [categories]);
 
   const { current, previous } = useMemo(() => {
-    const currentKey = format(currentMonth, "yyyy-MM");
-    const previousKey = format(previousMonth, "yyyy-MM");
-
-    const currentItems = transactions.filter((transaction) =>
-      transaction.date.startsWith(currentKey)
+    const currentItems = transactions.filter(
+      (transaction) =>
+        transaction.date >= rangeStart && transaction.date <= rangeEnd
     );
-    const previousItems = transactions.filter((transaction) =>
-      transaction.date.startsWith(previousKey)
+    const previousItems = transactions.filter(
+      (transaction) =>
+        transaction.date >= previousStart && transaction.date <= previousEnd
     );
 
     return { current: currentItems, previous: previousItems };
-  }, [transactions, currentMonth, previousMonth]);
+  }, [previousEnd, previousStart, rangeEnd, rangeStart, transactions]);
 
   const totals = useMemo(() => {
     const sum = (items: typeof current) =>
@@ -95,6 +113,7 @@ export default function InsightsPage() {
 
     return Array.from(totalsByCategory.entries())
       .map(([categoryId, amount]) => ({
+        categoryId,
         category: categoryNameMap.get(categoryId) ?? "Uncategorized",
         amount
       }))
@@ -137,6 +156,35 @@ export default function InsightsPage() {
   const incomeDelta = totals.current.income - totals.previous.income;
   const expenseDelta = totals.current.expense - totals.previous.expense;
 
+  const netTrend = useMemo(() => {
+    const daily = new Map<string, number>();
+    current.forEach((transaction) => {
+      const value =
+        transaction.type === "income"
+          ? transaction.amount_cents
+          : -transaction.amount_cents;
+      daily.set(transaction.date, (daily.get(transaction.date) ?? 0) + value);
+    });
+    return Array.from(daily.entries())
+      .map(([date, net]) => ({ date, net: Math.round(net / 100) }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [current]);
+
+  const selectedCategoryName = selectedCategory
+    ? categoryNameMap.get(selectedCategory) ?? "Uncategorized"
+    : null;
+  const selectedCategoryTransactions = useMemo(() => {
+    if (!selectedCategory) return [];
+    return current
+      .filter((transaction) => {
+        if (selectedCategory === "uncategorized") {
+          return !transaction.category_id;
+        }
+        return transaction.category_id === selectedCategory;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [current, selectedCategory]);
+
   return (
     <div className="space-y-8">
       <div>
@@ -145,7 +193,24 @@ export default function InsightsPage() {
           Month-over-month comparisons and spending patterns.
         </p>
       </div>
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            value={rangeStart}
+            onChange={(event) => setRangeStart(event.target.value)}
+            className="w-[160px]"
+          />
+          <Input
+            type="date"
+            value={rangeEnd}
+            onChange={(event) => setRangeEnd(event.target.value)}
+            className="w-[160px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            Comparing previous {dayCount} days
+          </p>
+        </div>
         <Select
           value={selectedCurrency}
           onValueChange={(value) => {
@@ -176,7 +241,7 @@ export default function InsightsPage() {
               {formatCurrency(incomeDelta, selectedCurrency)}
             </p>
             <p className="text-sm text-muted-foreground">
-              vs {format(previousMonth, "MMMM")}
+              vs previous {dayCount} days
             </p>
           </CardContent>
         </Card>
@@ -189,11 +254,20 @@ export default function InsightsPage() {
               {formatCurrency(expenseDelta, selectedCurrency)}
             </p>
             <p className="text-sm text-muted-foreground">
-              vs {format(previousMonth, "MMMM")}
+              vs previous {dayCount} days
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Net trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <NetTrendChart data={netTrend} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -202,12 +276,54 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {topCategories.map((item) => (
-              <div key={item.category} className="flex items-center justify-between text-sm">
-                <span>{item.category}</span>
-                <span className="font-medium">
-                  {formatCurrency(item.amount, selectedCurrency)}
-                </span>
-              </div>
+              <Dialog key={item.categoryId}>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(item.categoryId)}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40"
+                  >
+                    <span>{item.category}</span>
+                    <span className="font-medium">
+                      {formatCurrency(item.amount, selectedCurrency)}
+                    </span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>{selectedCategoryName ?? "Category detail"}</DialogTitle>
+                  </DialogHeader>
+                  <div className="rounded-xl border border-border/60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Merchant</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedCategoryTransactions.map((transaction) => (
+                          <TableRow key={transaction.id}>
+                            <TableCell>{transaction.date}</TableCell>
+                            <TableCell>{transaction.merchant ?? "-"}</TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(transaction.amount_cents, selectedCurrency)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {selectedCategoryTransactions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                              No transactions in this range.
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </DialogContent>
+              </Dialog>
             ))}
           </CardContent>
         </Card>

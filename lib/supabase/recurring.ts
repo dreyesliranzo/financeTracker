@@ -7,7 +7,7 @@ type MaterializeResult = {
   updated: number;
 };
 
-function formatDate(value: Date) {
+export function formatDate(value: Date) {
   return format(value, "yyyy-MM-dd");
 }
 
@@ -29,6 +29,13 @@ function advanceDate(date: string, cadence: RecurringTransaction["cadence"]) {
     default:
       return addMonths(base, 1);
   }
+}
+
+export function getNextRunDate(
+  date: string,
+  cadence: RecurringTransaction["cadence"]
+) {
+  return formatDate(advanceDate(date, cadence));
 }
 
 export async function materializeRecurringTransactions(

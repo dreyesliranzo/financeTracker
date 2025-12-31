@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import { fetchAccounts, fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
 import { deleteBudget } from "@/lib/supabase/mutations";
 import { BudgetForm } from "@/components/forms/BudgetForm";
 import { formatCurrency } from "@/lib/money";
@@ -21,11 +21,16 @@ export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const didSelectCurrency = useRef(false);
+  const [accountFilter, setAccountFilter] = useState("all");
   const queryClient = useQueryClient();
   const [year, monthIndex] = month.split("-").map((value) => Number(value));
   const monthDate = new Date(year, monthIndex - 1, 1);
   const rangeStart = format(startOfMonth(monthDate), "yyyy-MM-dd");
   const rangeEnd = format(endOfMonth(monthDate), "yyyy-MM-dd");
+  const prevMonthDate = subMonths(monthDate, 1);
+  const prevMonth = format(prevMonthDate, "yyyy-MM");
+  const prevRangeStart = format(startOfMonth(prevMonthDate), "yyyy-MM-dd");
+  const prevRangeEnd = format(endOfMonth(prevMonthDate), "yyyy-MM-dd");
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -38,11 +43,23 @@ export default function BudgetsPage() {
   });
   const budgets = budgetsQuery.data ?? [];
 
+  const previousBudgetsQuery = useQuery({
+    queryKey: ["budgets", prevMonth, selectedCurrency, "previous"],
+    queryFn: () => fetchBudgets(`${prevMonth}-01`, selectedCurrency)
+  });
+  const previousBudgets = previousBudgetsQuery.data ?? [];
+
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
   const categories = categoriesQuery.data ?? [];
+
+  const accountsQuery = useQuery({
+    queryKey: ["accounts"],
+    queryFn: fetchAccounts
+  });
+  const accounts = accountsQuery.data ?? [];
 
   const transactionsQuery = useQuery({
     queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
@@ -50,7 +67,19 @@ export default function BudgetsPage() {
   });
   const transactions = transactionsQuery.data ?? [];
 
-  const isLoading = budgetsQuery.isLoading || categoriesQuery.isLoading || transactionsQuery.isLoading;
+  const prevTransactionsQuery = useQuery({
+    queryKey: ["transactions", prevRangeStart, prevRangeEnd, selectedCurrency, "previous"],
+    queryFn: () => fetchTransactions({ start: prevRangeStart, end: prevRangeEnd }, selectedCurrency)
+  });
+  const prevTransactions = prevTransactionsQuery.data ?? [];
+
+  const isLoading =
+    budgetsQuery.isLoading ||
+    categoriesQuery.isLoading ||
+    transactionsQuery.isLoading ||
+    previousBudgetsQuery.isLoading ||
+    prevTransactionsQuery.isLoading ||
+    accountsQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -67,22 +96,64 @@ export default function BudgetsPage() {
   }, [categories]);
 
   const budgetsWithProgress = useMemo(() => {
+    const prevSpentByCategory = new Map<string, number>();
+    prevTransactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          (accountFilter === "all" || transaction.account_id === accountFilter)
+      )
+      .forEach((transaction) => {
+        const key = transaction.category_id ?? "uncategorized";
+        prevSpentByCategory.set(
+          key,
+          (prevSpentByCategory.get(key) ?? 0) + transaction.amount_cents
+        );
+      });
+
+    const prevBudgetByCategory = new Map(
+      previousBudgets.map((budget) => [budget.category_id, budget.limit_cents])
+    );
+
     return budgets.map((budget) => {
       const spent = transactions
         .filter(
           (transaction) =>
             transaction.type === "expense" &&
-            transaction.category_id === budget.category_id
+            transaction.category_id === budget.category_id &&
+            (accountFilter === "all" || transaction.account_id === accountFilter)
         )
         .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
+
+      const prevLimit = prevBudgetByCategory.get(budget.category_id) ?? 0;
+      const prevSpent = prevSpentByCategory.get(budget.category_id) ?? 0;
+      const carryover = Math.max(0, prevLimit - prevSpent);
 
       return {
         ...budget,
         categoryName: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
-        spent
+        spent,
+        carryover,
+        effectiveLimit: budget.limit_cents + carryover
       };
     });
-  }, [budgets, transactions, categoryNameMap]);
+  }, [
+    accountFilter,
+    budgets,
+    categoryNameMap,
+    prevTransactions,
+    previousBudgets,
+    transactions
+  ]);
+
+  const alertBudgets = useMemo(() => {
+    return budgetsWithProgress.filter((budget) => {
+      const ratio = budget.effectiveLimit
+        ? budget.spent / budget.effectiveLimit
+        : 0;
+      return ratio >= 0.8;
+    });
+  }, [budgetsWithProgress]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -129,6 +200,19 @@ export default function BudgetsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Account" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All accounts</SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account.id!} value={account.id!}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Dialog>
             <DialogTrigger asChild>
               <Button>Create budget</Button>
@@ -139,6 +223,38 @@ export default function BudgetsPage() {
           </Dialog>
         </div>
       </div>
+
+      {alertBudgets.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Budget alerts</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {alertBudgets.map((budget) => {
+              const ratio = budget.effectiveLimit
+                ? budget.spent / budget.effectiveLimit
+                : 0;
+              return (
+                <div
+                  key={`alert-${budget.id}`}
+                  className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">{budget.categoryName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {ratio >= 1 ? "Over budget" : "Near limit"}
+                    </p>
+                  </div>
+                  <p className="font-medium">
+                    {formatCurrency(budget.spent, selectedCurrency)} /{" "}
+                    {formatCurrency(budget.effectiveLimit, selectedCurrency)}
+                  </p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {isLoading
@@ -155,8 +271,8 @@ export default function BudgetsPage() {
               </Card>
             ))
           : budgetsWithProgress.map((budget) => {
-              const ratio = budget.limit_cents
-                ? budget.spent / budget.limit_cents
+              const ratio = budget.effectiveLimit
+                ? budget.spent / budget.effectiveLimit
                 : 0;
               return (
                 <Card key={budget.id}>
@@ -164,8 +280,13 @@ export default function BudgetsPage() {
                     <div>
                       <CardTitle>{budget.categoryName}</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {formatCurrency(budget.spent, selectedCurrency)} of {formatCurrency(budget.limit_cents, selectedCurrency)}
+                        {formatCurrency(budget.spent, selectedCurrency)} of {formatCurrency(budget.effectiveLimit, selectedCurrency)}
                       </p>
+                      {budget.carryover > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Includes {formatCurrency(budget.carryover, selectedCurrency)} rollover
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <Dialog>

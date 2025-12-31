@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { AccountForm } from "@/components/forms/AccountForm";
 import { CategoryForm } from "@/components/forms/CategoryForm";
@@ -71,6 +72,10 @@ export default function SettingsPage() {
     return requiredCsvFields.every((field) => Boolean(mapping[field]));
   }, [mapping]);
 
+  const previewRows = useMemo(() => {
+    return csvData.slice(0, 5);
+  }, [csvData]);
+
   const categoryNameMap = useMemo(() => {
     return new Map(
       categories
@@ -87,22 +92,63 @@ export default function SettingsPage() {
     );
   }, [accounts]);
 
+  const autoMapHeaders = (headers: string[]) => {
+    const normalized = headers.map((header) => header.toLowerCase());
+    const findHeader = (candidates: string[]) => {
+      const index = normalized.findIndex((header) =>
+        candidates.some((candidate) => header.includes(candidate))
+      );
+      return index >= 0 ? headers[index] : "";
+    };
+
+    return {
+      date: findHeader(["date", "posted", "transaction date"]),
+      amount: findHeader(["amount", "amt", "value", "total"]),
+      type: findHeader(["type", "transaction type"]),
+      category: findHeader(["category", "cat"]),
+      account: findHeader(["account", "acct", "card"]),
+      currency: findHeader(["currency", "curr"]),
+      merchant: findHeader(["merchant", "payee", "description", "name"]),
+      notes: findHeader(["notes", "memo"]),
+      tags: findHeader(["tags", "label"])
+    };
+  };
+
+  const makeTransactionKey = (options: {
+    date: string;
+    amount: number;
+    type: string;
+    accountId?: string | null;
+    categoryId?: string | null;
+    merchant?: string | null;
+  }) => {
+    return [
+      options.date,
+      options.amount,
+      options.type,
+      options.accountId ?? "",
+      options.categoryId ?? "",
+      options.merchant?.toLowerCase() ?? ""
+    ].join("|");
+  };
+
   const handleCsvFile = async (file?: File | null) => {
     if (!file) return;
     try {
       const { headers, data } = await parseCsv(file);
       setCsvHeaders(headers);
       setCsvData(data);
+      const detected = autoMapHeaders(headers);
       setMapping({
-        date: "",
-        amount: "",
-        type: "",
-        category: "",
-        account: "",
-        currency: "",
-        merchant: "",
-        notes: "",
-        tags: ""
+        date: detected.date,
+        amount: detected.amount,
+        type: detected.type,
+        category: detected.category,
+        account: detected.account,
+        currency: detected.currency,
+        merchant: detected.merchant,
+        notes: detected.notes,
+        tags: detected.tags
       });
     } catch (error) {
       console.error(error);
@@ -124,6 +170,18 @@ export default function SettingsPage() {
       );
       const accountMap = new Map(
         accounts.map((account) => [account.name.toLowerCase(), account.id])
+      );
+      const existingKeys = new Set(
+        transactions.map((transaction) =>
+          makeTransactionKey({
+            date: transaction.date,
+            amount: transaction.amount_cents,
+            type: transaction.type,
+            accountId: transaction.account_id,
+            categoryId: transaction.category_id,
+            merchant: transaction.merchant ?? ""
+          })
+        )
       );
 
       const ensureCategory = async (name: string, type: "income" | "expense") => {
@@ -152,6 +210,9 @@ export default function SettingsPage() {
         currencyOptions.map((currency) => currency.value.toUpperCase())
       );
 
+      let insertedCount = 0;
+      let duplicateCount = 0;
+
       for (const row of csvData) {
         const dateValue = row[mapping.date];
         const amountValue = row[mapping.amount];
@@ -167,8 +228,7 @@ export default function SettingsPage() {
         const rawCategory = mapping.category ? row[mapping.category] : "";
         const rawAccount = mapping.account ? row[mapping.account] : "";
         const categoryName =
-          rawCategory ||
-          (type === "expense" ? "Uncategorized" : "Income");
+          rawCategory || (type === "expense" ? "Uncategorized" : "Income");
         const accountName = rawAccount || "Default";
 
         const categoryId = await ensureCategory(categoryName, type);
@@ -179,6 +239,20 @@ export default function SettingsPage() {
         const currencyCode = (currencyLookup.has(currencyValue)
           ? currencyValue
           : defaultCurrency) as CurrencyCode;
+
+        const key = makeTransactionKey({
+          date: dateValue,
+          amount: amountCents,
+          type,
+          accountId,
+          categoryId,
+          merchant: mapping.merchant ? row[mapping.merchant] : null
+        });
+
+        if (existingKeys.has(key)) {
+          duplicateCount += 1;
+          continue;
+        }
 
         await createTransaction(user.id, {
           date: dateValue,
@@ -196,12 +270,19 @@ export default function SettingsPage() {
                 .filter(Boolean) ?? []
             : []
         });
+        insertedCount += 1;
+        existingKeys.add(key);
       }
 
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      toast.success("CSV import complete");
+      const message = `Imported ${insertedCount} transaction(s)`;
+      toast.success(
+        duplicateCount > 0
+          ? `${message}. ${duplicateCount} duplicate(s) skipped.`
+          : message
+      );
       setCsvHeaders([]);
       setCsvData([]);
     } catch (error) {
@@ -443,7 +524,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="font-medium">{account.name}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                      {account.type} • {account.currency_code ?? "USD"}
+                      {account.type} - {account.currency_code ?? "USD"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -549,6 +630,37 @@ export default function SettingsPage() {
                         </div>
                       ))}
                     </div>
+                    {previewRows.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Preview (first 5 rows)</p>
+                        <div className="rounded-xl border border-border/60">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Category</TableHead>
+                                <TableHead>Account</TableHead>
+                                <TableHead>Currency</TableHead>
+                                <TableHead>Merchant</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {previewRows.map((row, index) => (
+                                <TableRow key={`preview-${index}`}>
+                                  <TableCell>{mapping.date ? row[mapping.date] : "-"}</TableCell>
+                                  <TableCell>{mapping.amount ? row[mapping.amount] : "-"}</TableCell>
+                                  <TableCell>{mapping.category ? row[mapping.category] : "-"}</TableCell>
+                                  <TableCell>{mapping.account ? row[mapping.account] : "-"}</TableCell>
+                                  <TableCell>{mapping.currency ? row[mapping.currency] : "-"}</TableCell>
+                                  <TableCell>{mapping.merchant ? row[mapping.merchant] : "-"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    ) : null}
                     <Button onClick={handleImportCsv} disabled={isImporting}>
                       {isImporting ? "Importing..." : "Import CSV"}
                     </Button>

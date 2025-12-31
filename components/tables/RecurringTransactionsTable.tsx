@@ -5,18 +5,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatSignedCurrency } from "@/lib/money";
 import { fetchAccounts, fetchCategories, fetchRecurringTransactions } from "@/lib/supabase/queries";
-import { deleteRecurringTransaction, updateRecurringTransaction } from "@/lib/supabase/mutations";
+import { createTransaction, deleteRecurringTransaction, updateRecurringTransaction } from "@/lib/supabase/mutations";
 import type { RecurringTransaction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RecurringForm } from "@/components/forms/RecurringForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { formatDate, getNextRunDate } from "@/lib/supabase/recurring";
 
 export function RecurringTransactionsTable() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<RecurringTransaction | null>(null);
 
@@ -53,6 +57,22 @@ export function RecurringTransactionsTable() {
 
   const skeletonRows = useMemo(() => Array.from({ length: 5 }, (_, index) => index), []);
 
+  const summary = useMemo(() => {
+    const active = recurring.filter((item) => item.active);
+    const nextWeek = active.filter((item) => {
+      if (!item.next_run) return false;
+      const next = new Date(item.next_run);
+      const today = new Date();
+      const delta = next.getTime() - today.getTime();
+      return delta >= 0 && delta <= 7 * 24 * 60 * 60 * 1000;
+    });
+    return {
+      activeCount: active.length,
+      pausedCount: recurring.length - active.length,
+      dueSoon: nextWeek.length
+    };
+  }, [recurring]);
+
   const handleToggleActive = async (item: RecurringTransaction) => {
     try {
       await updateRecurringTransaction(item.id!, { active: !item.active });
@@ -61,6 +81,47 @@ export function RecurringTransactionsTable() {
     } catch (error) {
       console.error(error);
       toast.error("Unable to update recurring transaction");
+    }
+  };
+
+  const handleRunNow = async (item: RecurringTransaction) => {
+    if (!user) return;
+    try {
+      const today = formatDate(new Date());
+      await createTransaction(user.id, {
+        date: today,
+        amount_cents: item.amount_cents,
+        type: item.type,
+        category_id: item.category_id ?? null,
+        account_id: item.account_id ?? null,
+        currency_code: item.currency_code ?? "USD",
+        merchant: item.merchant ?? null,
+        notes: item.notes ?? null,
+        tags: item.tags ?? []
+      });
+      const nextRun = getNextRunDate(item.next_run, item.cadence);
+      await updateRecurringTransaction(item.id!, {
+        last_run: today,
+        next_run: nextRun
+      });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
+      toast.success("Recurring transaction created");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to run recurring transaction");
+    }
+  };
+
+  const handleSkipNext = async (item: RecurringTransaction) => {
+    try {
+      const nextRun = getNextRunDate(item.next_run, item.cadence);
+      await updateRecurringTransaction(item.id!, { next_run: nextRun });
+      queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
+      toast.success("Next occurrence skipped");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to skip occurrence");
     }
   };
 
@@ -96,10 +157,12 @@ export function RecurringTransactionsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Automate repeating entries and keep schedules in sync.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Automate repeating entries and keep schedules in sync.
+          </p>
+        </div>
         <Dialog>
           <DialogTrigger asChild>
             <Button>New recurring</Button>
@@ -110,6 +173,33 @@ export function RecurringTransactionsTable() {
         </Dialog>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Active</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{summary.activeCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Due soon</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{summary.dueSoon}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Paused</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{summary.pausedCount}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="rounded-2xl border border-border/60 bg-card/70">
         <Table className="min-w-[980px]">
           <TableHeader>
@@ -117,6 +207,7 @@ export function RecurringTransactionsTable() {
               <TableHead>Name</TableHead>
               <TableHead>Cadence</TableHead>
               <TableHead>Next run</TableHead>
+              <TableHead>Last run</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Amount</TableHead>
@@ -133,6 +224,9 @@ export function RecurringTransactionsTable() {
                     </TableCell>
                     <TableCell>
                       <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
                     </TableCell>
                     <TableCell>
                       <Skeleton className="h-4 w-20" />
@@ -174,6 +268,7 @@ export function RecurringTransactionsTable() {
                       <TableCell className="font-medium">{title}</TableCell>
                       <TableCell className="capitalize">{item.cadence}</TableCell>
                       <TableCell>{item.next_run}</TableCell>
+                      <TableCell>{item.last_run ?? "-"}</TableCell>
                       <TableCell>{accountName ?? "-"}</TableCell>
                       <TableCell>{categoryName ?? "-"}</TableCell>
                       <TableCell className="text-right font-medium">
@@ -203,6 +298,22 @@ export function RecurringTransactionsTable() {
                             onClick={() => handleToggleActive(item)}
                           >
                             {item.active ? "Pause" : "Resume"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRunNow(item)}
+                            disabled={!item.active}
+                          >
+                            Run now
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSkipNext(item)}
+                            disabled={!item.active}
+                          >
+                            Skip next
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

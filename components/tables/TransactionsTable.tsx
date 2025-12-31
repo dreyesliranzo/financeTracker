@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatSignedCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactionsPage } from "@/lib/supabase/queries";
 import { bulkDeleteTransactions, deleteTransaction } from "@/lib/supabase/mutations";
 import type { Transaction } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -39,15 +39,49 @@ export function TransactionsTable() {
   const [page, setPage] = useState(1);
   const deferredSearch = useDeferredValue(search);
   const pageSize = 50;
+  const hasFilters =
+    deferredSearch.trim().length > 0 ||
+    typeFilter !== "all" ||
+    categoryFilter !== "all" ||
+    accountFilter !== "all" ||
+    currencyFilter !== "all" ||
+    Boolean(startDate) ||
+    Boolean(endDate);
 
-  const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["transactions", startDate, endDate, currencyFilter],
+  const transactionsQuery = useQuery({
+    queryKey: [
+      "transactions",
+      startDate,
+      endDate,
+      currencyFilter,
+      typeFilter,
+      categoryFilter,
+      accountFilter,
+      deferredSearch,
+      page,
+      pageSize
+    ],
     queryFn: () =>
-      fetchTransactions({
-        start: startDate || undefined,
-        end: endDate || undefined
-      }, currencyFilter === "all" ? undefined : currencyFilter)
+      fetchTransactionsPage({
+        range: {
+          start: startDate || undefined,
+          end: endDate || undefined
+        },
+        filters: {
+          currencyCode: currencyFilter === "all" ? undefined : currencyFilter,
+          type: typeFilter === "all" ? undefined : (typeFilter as "income" | "expense"),
+          categoryId: categoryFilter === "all" ? undefined : categoryFilter,
+          accountId: accountFilter === "all" ? undefined : accountFilter,
+          search: deferredSearch.trim().length > 0 ? deferredSearch : undefined
+        },
+        page,
+        pageSize
+      }),
+    placeholderData: (previous) => previous
   });
+  const transactions = transactionsQuery.data?.data ?? [];
+  const totalCount = transactionsQuery.data?.count ?? 0;
+  const isLoading = transactionsQuery.isLoading;
   const { data: profile } = useQuery({
     queryKey: ["profile"],
     queryFn: fetchProfile
@@ -80,53 +114,26 @@ export function TransactionsTable() {
   }, [accounts]);
 
   const filtered = useMemo(() => {
-    return transactions
-      .filter((transaction) => {
-        if (typeFilter !== "all" && transaction.type !== typeFilter) {
-          return false;
-        }
-        if (categoryFilter !== "all" && transaction.category_id !== categoryFilter) {
-          return false;
-        }
-        if (accountFilter !== "all" && transaction.account_id !== accountFilter) {
-          return false;
-        }
-        if (
-          currencyFilter !== "all" &&
-          transaction.currency_code !== currencyFilter
-        ) {
-          return false;
-        }
-        if (deferredSearch.trim().length > 0) {
-          const query = deferredSearch.toLowerCase();
-          const matchMerchant = transaction.merchant?.toLowerCase().includes(query);
-          const matchNotes = transaction.notes?.toLowerCase().includes(query);
-          const matchTags = transaction.tags?.some((tag) => tag.toLowerCase().includes(query));
-          return Boolean(matchMerchant || matchNotes || matchTags);
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortKey === "amount") {
-          return b.amount_cents - a.amount_cents;
-        }
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
+    let rows = transactions;
+    if (deferredSearch.trim().length > 0) {
+      const query = deferredSearch.toLowerCase();
+      rows = rows.filter((transaction) => {
+        const matchMerchant = transaction.merchant?.toLowerCase().includes(query);
+        const matchNotes = transaction.notes?.toLowerCase().includes(query);
+        const matchTags = transaction.tags?.some((tag) => tag.toLowerCase().includes(query));
+        return Boolean(matchMerchant || matchNotes || matchTags);
       });
-  }, [
-    transactions,
-    typeFilter,
-    categoryFilter,
-    accountFilter,
-    currencyFilter,
-    deferredSearch,
-    sortKey
-  ]);
+    }
+    return [...rows].sort((a, b) => {
+      if (sortKey === "amount") {
+        return b.amount_cents - a.amount_cents;
+      }
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  }, [transactions, deferredSearch, sortKey]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const paged = filtered;
 
   const skeletonRows = useMemo(() => Array.from({ length: 6 }, (_, index) => index), []);
 
@@ -140,9 +147,15 @@ export function TransactionsTable() {
     }
   }, [currencyFilter, profile]);
 
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(filtered.map((item) => item.id!).filter(Boolean));
+      setSelectedIds(paged.map((item) => item.id!).filter(Boolean));
     } else {
       setSelectedIds([]);
     }
@@ -177,11 +190,15 @@ export function TransactionsTable() {
     }
   };
 
-  if (!isLoading && filtered.length === 0) {
+  if (!isLoading && totalCount === 0) {
     return (
       <EmptyState
-        title="No transactions yet"
-        description="Add your first transaction to see insights here."
+        title={hasFilters ? "No matching transactions" : "No transactions yet"}
+        description={
+          hasFilters
+            ? "Try adjusting your filters or search."
+            : "Add your first transaction to see insights here."
+        }
         action={
           <Dialog>
             <DialogTrigger asChild>
@@ -442,8 +459,8 @@ export function TransactionsTable() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <p>
-          Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}-
-          {Math.min(page * pageSize, filtered.length)} of {filtered.length}
+          Showing {totalCount === 0 ? 0 : (page - 1) * pageSize + 1}-
+          {totalCount === 0 ? 0 : (page - 1) * pageSize + paged.length} of {totalCount}
         </p>
         <div className="flex items-center gap-2">
           <Button
