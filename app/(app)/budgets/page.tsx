@@ -26,7 +26,7 @@ import { OverallBudgetForm } from "@/components/forms/OverallBudgetForm";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { Stagger } from "@/components/layout/Stagger";
-import { categoryTotals, flattenSplits, sumIncomeExpense, type TransactionWithSplits } from "@/lib/utils/transactions";
+import { categoryTotals, sumExpenseLines, type TransactionWithSplits } from "@/lib/utils/transactions";
 
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -107,6 +107,28 @@ export default function BudgetsPage() {
     setSelectedCurrency(profile.default_currency);
   }, [profile?.default_currency]);
 
+  const scopedTransactions = useMemo(() => {
+    if (accountFilter === "all") return transactions;
+    return transactions.filter((transaction) => transaction.account_id === accountFilter);
+  }, [accountFilter, transactions]);
+
+  const scopedPrevTransactions = useMemo(() => {
+    if (accountFilter === "all") return prevTransactions;
+    return prevTransactions.filter((transaction) => transaction.account_id === accountFilter);
+  }, [accountFilter, prevTransactions]);
+
+  const spentByCategory = useMemo(() => {
+    return categoryTotals(scopedTransactions);
+  }, [scopedTransactions]);
+
+  const prevSpentByCategory = useMemo(() => {
+    return categoryTotals(scopedPrevTransactions);
+  }, [scopedPrevTransactions]);
+
+  const overallSpent = useMemo(() => {
+    return sumExpenseLines(scopedTransactions);
+  }, [scopedTransactions]);
+
   const categoryNameMap = useMemo(() => {
     return new Map(
       categories
@@ -116,32 +138,11 @@ export default function BudgetsPage() {
   }, [categories]);
 
   const budgetsWithProgress = useMemo(() => {
-    const prevSpentByCategory = categoryTotals(
-      prevTransactions.filter(
-        (transaction) =>
-          (transaction.transaction_kind ?? transaction.type) !== "transfer" &&
-          (accountFilter === "all" || transaction.account_id === accountFilter)
-      )
-    );
-
     const prevBudgetByCategory = new Map(
       previousBudgets.map((budget) => [budget.category_id, budget.limit_cents])
     );
 
     return budgets.map((budget) => {
-      const spent = transactions.reduce((sum, transaction) => {
-        if (accountFilter !== "all" && transaction.account_id !== accountFilter) {
-          return sum;
-        }
-        flattenSplits(transaction).forEach((line) => {
-          if (line.kind !== "expense") return;
-          if (line.category_id === budget.category_id) {
-            sum += line.amount_cents;
-          }
-        });
-        return sum;
-      }, 0);
-
       const prevLimit = prevBudgetByCategory.get(budget.category_id) ?? 0;
       const prevSpent = prevSpentByCategory[budget.category_id] ?? 0;
       const carryover = Math.max(0, prevLimit - prevSpent);
@@ -149,31 +150,18 @@ export default function BudgetsPage() {
       return {
         ...budget,
         categoryName: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
-        spent,
+        spent: spentByCategory[budget.category_id] ?? 0,
         carryover,
         effectiveLimit: budget.limit_cents + carryover
       };
     });
   }, [
-    accountFilter,
     budgets,
     categoryNameMap,
-    prevTransactions,
     previousBudgets,
-    transactions
+    prevSpentByCategory,
+    spentByCategory
   ]);
-
-  const overallSpent = useMemo(() => {
-    return transactions.reduce((sum, transaction) => {
-      if (accountFilter !== "all" && transaction.account_id !== accountFilter) return sum;
-      flattenSplits(transaction).forEach((line) => {
-        if (line.kind === "expense") {
-          sum += line.amount_cents;
-        }
-      });
-      return sum;
-    }, 0);
-  }, [accountFilter, transactions]);
 
   const overallRatio =
     overallBudget && overallBudget.limit_cents

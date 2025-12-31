@@ -6,6 +6,7 @@ import { format, subDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
+import { buildMerchantTotals, categoryTotals, sumIncomeExpense } from "@/lib/utils/transactions";
 
 type Message = {
   role: "user" | "assistant";
@@ -64,29 +65,13 @@ export function AdvisorChat() {
   }, [categories]);
 
   const summary = useMemo(() => {
-    return transactions.reduce(
-      (acc, transaction) => {
-        if (transaction.type === "income") {
-          acc.income += transaction.amount_cents;
-        } else {
-          acc.expense += transaction.amount_cents;
-        }
-        return acc;
-      },
-      { income: 0, expense: 0 }
-    );
+    return sumIncomeExpense(transactions);
   }, [transactions]);
 
   const topCategory = useMemo(() => {
-    const totals = new Map<string, number>();
-    transactions
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
-      .forEach((transaction) => {
-        const key = transaction.category_id ?? "uncategorized";
-        totals.set(key, (totals.get(key) ?? 0) + transaction.amount_cents);
-      });
+    const totals = categoryTotals(transactions);
     const [categoryId, amount] =
-      Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0] ?? [];
+      Object.entries(totals).sort((a, b) => b[1] - a[1])[0] ?? [];
     return {
       name: categoryId ? categoryNameMap.get(categoryId) ?? "Uncategorized" : "None",
       amount: amount ?? 0
@@ -94,16 +79,7 @@ export function AdvisorChat() {
   }, [categoryNameMap, transactions]);
 
   const topMerchant = useMemo(() => {
-    const totals = new Map<string, number>();
-    transactions
-      .filter(
-        (transaction) =>
-          (transaction.transaction_kind ?? transaction.type) === "expense" && transaction.merchant
-      )
-      .forEach((transaction) => {
-        const key = transaction.merchant ?? "Unknown";
-        totals.set(key, (totals.get(key) ?? 0) + transaction.amount_cents);
-      });
+    const totals = buildMerchantTotals(transactions);
     const [merchant, amount] =
       Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0] ?? [];
     return {
@@ -116,17 +92,11 @@ export function AdvisorChat() {
     if (budgets.length === 0) {
       return "You do not have budgets yet. Add one to start tracking.";
     }
-    const spentByCategory = new Map<string, number>();
-    transactions
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
-      .forEach((transaction) => {
-        const key = transaction.category_id ?? "uncategorized";
-        spentByCategory.set(key, (spentByCategory.get(key) ?? 0) + transaction.amount_cents);
-      });
+    const spentByCategory = categoryTotals(transactions);
 
     const highestRatio = budgets.reduce(
       (acc, budget) => {
-        const spent = spentByCategory.get(budget.category_id) ?? 0;
+        const spent = spentByCategory[budget.category_id] ?? 0;
         const ratio = budget.limit_cents ? spent / budget.limit_cents : 0;
         if (ratio > acc.ratio) {
           return {
@@ -174,10 +144,7 @@ export function AdvisorChat() {
     return `Last 30 days: ${formatCurrency(summary.income, currency)} income, ${formatCurrency(
       summary.expense,
       currency
-    )} expenses, net ${formatCurrency(
-      summary.income - summary.expense,
-      currency
-    )}.`;
+    )} expenses, net ${formatCurrency(summary.net, currency)}.`;
   };
 
   const sendMessage = (content: string) => {

@@ -30,7 +30,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { Stagger } from "@/components/layout/Stagger";
-import { sumIncomeExpense, categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
+import {
+  buildCashflowSeries,
+  categoryTotals,
+  sumIncomeExpense,
+  type TransactionWithSplits
+} from "@/lib/utils/transactions";
 import { estimateMonthlyCents } from "@/lib/utils/subscriptions";
 
 const ChartFallback = () => (
@@ -177,46 +182,20 @@ export default function DashboardPage() {
   }, [categoryNameMap, scopedTransactions]);
 
   const cashflowData = useMemo(() => {
-    const byDate = new Map<string, { income: number; expense: number }>();
-    scopedTransactions
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) !== "transfer")
-      .forEach((transaction) => {
-        if (!byDate.has(transaction.date)) {
-          byDate.set(transaction.date, { income: 0, expense: 0 });
-        }
-        const entry = byDate.get(transaction.date)!;
-        const kind = transaction.transaction_kind ?? transaction.type;
-        if (kind === "income") {
-          entry.income += transaction.amount_cents / 100;
-        } else {
-          entry.expense += transaction.amount_cents / 100;
-        }
-      });
+    return buildCashflowSeries(scopedTransactions, { scale: 100 });
+  }, [scopedTransactions]);
 
-    return Array.from(byDate.entries())
-      .map(([date, values]) => ({ date, ...values }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const spentByCategory = useMemo(() => {
+    return categoryTotals(scopedTransactions);
   }, [scopedTransactions]);
 
   const budgetProgress = useMemo(() => {
-    return budgets.map((budget) => {
-      const spent = scopedTransactions.reduce((sum, transaction) => {
-        flattenSplits(transaction).forEach((line) => {
-          if (line.kind !== "expense") return;
-          if (line.category_id === budget.category_id) {
-            sum += line.amount_cents;
-          }
-        });
-        return sum;
-      }, 0);
-
-      return {
-        category: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
-        spent,
-        limit: budget.limit_cents
-      };
-    });
-  }, [budgets, scopedTransactions, categoryNameMap]);
+    return budgets.map((budget) => ({
+      category: categoryNameMap.get(budget.category_id) ?? "Uncategorized",
+      spent: spentByCategory[budget.category_id] ?? 0,
+      limit: budget.limit_cents
+    }));
+  }, [budgets, categoryNameMap, spentByCategory]);
 
   const goalProgress = useMemo(() => {
     return goals

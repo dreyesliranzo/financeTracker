@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import {
-  addDays,
   differenceInCalendarDays,
   endOfMonth,
   format,
@@ -35,7 +34,17 @@ import {
 } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { categoryTotals, flattenSplits, sumIncomeExpense, type TransactionWithSplits } from "@/lib/utils/transactions";
+import {
+  buildAccountBalances,
+  buildAccountSummary,
+  buildMerchantTotals,
+  buildNetTrendSeries,
+  buildNetWorthTrend,
+  buildWeekdayTotals,
+  categoryTotals,
+  sumIncomeExpense,
+  type TransactionWithSplits
+} from "@/lib/utils/transactions";
 
 const ChartFallback = () => (
   <div className="space-y-3">
@@ -210,24 +219,9 @@ export default function InsightsPage() {
   }, [previousEnd, previousStart, rangeEnd, rangeStart, transactions]);
 
   const totals = useMemo(() => {
-    const sum = (items: typeof current) =>
-      items.reduce(
-        (acc, transaction) => {
-          const kind = transaction.transaction_kind ?? transaction.type;
-          if (kind === "transfer") return acc;
-          if (kind === "income") {
-            acc.income += transaction.amount_cents;
-          } else {
-            acc.expense += transaction.amount_cents;
-          }
-          return acc;
-        },
-        { income: 0, expense: 0 }
-      );
-
     return {
-      current: sum(current),
-      previous: sum(previous)
+      current: sumIncomeExpense(current),
+      previous: sumIncomeExpense(previous)
     };
   }, [current, previous]);
 
@@ -244,18 +238,7 @@ export default function InsightsPage() {
   }, [current, categoryNameMap]);
 
   const topMerchants = useMemo(() => {
-    const totalsByMerchant = new Map<string, number>();
-    current
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
-      .forEach((transaction) => {
-        if (!transaction.merchant) return;
-        totalsByMerchant.set(
-          transaction.merchant,
-          (totalsByMerchant.get(transaction.merchant) ?? 0) +
-            transaction.amount_cents
-        );
-      });
-
+    const totalsByMerchant = buildMerchantTotals(current);
     return Array.from(totalsByMerchant.entries())
       .map(([merchant, amount]) => ({ merchant, amount }))
       .sort((a, b) => b.amount - a.amount)
@@ -263,35 +246,16 @@ export default function InsightsPage() {
   }, [current]);
 
   const weekdaySpend = useMemo(() => {
-    const totalsByDay = new Map<string, number>();
-    current
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
-      .forEach((transaction) => {
-        const day = format(new Date(transaction.date), "EEE");
-        flattenSplits(transaction).forEach((line) => {
-          if (line.kind !== "expense") return;
-          totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + line.amount_cents);
-        });
-      });
-
+    const totalsByDay = buildWeekdayTotals(current);
     const order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    return order.map((day) => ({ day, amount: totalsByDay.get(day) ?? 0 }));
+    return order.map((day) => ({ day, amount: totalsByDay[day] ?? 0 }));
   }, [current]);
 
   const incomeDelta = totals.current.income - totals.previous.income;
   const expenseDelta = totals.current.expense - totals.previous.expense;
 
   const netTrend = useMemo(() => {
-    const daily = new Map<string, number>();
-    current.forEach((transaction) => {
-      const kind = transaction.transaction_kind ?? transaction.type;
-      if (kind === "transfer") return;
-      const value = kind === "income" ? transaction.amount_cents : -transaction.amount_cents;
-      daily.set(transaction.date, (daily.get(transaction.date) ?? 0) + value);
-    });
-    return Array.from(daily.entries())
-      .map(([date, net]) => ({ date, net: Math.round(net / 100) }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return buildNetTrendSeries(current, { scale: 100 });
   }, [current]);
 
   const selectedCategoryName = selectedCategory
@@ -315,55 +279,11 @@ export default function InsightsPage() {
   }, [current, selectedCategory]);
 
   const accountBalances = useMemo(() => {
-    const balances = new Map<string, number>();
-    accounts.forEach((account) => {
-      if (!account.id) return;
-      if (account.currency_code && account.currency_code !== selectedCurrency) return;
-      balances.set(account.id, 0);
-    });
-
-    const applyDelta = (accountId: string | null | undefined, delta: number) => {
-      if (!accountId) return;
-      if (!balances.has(accountId)) return;
-      balances.set(accountId, (balances.get(accountId) ?? 0) + delta);
-    };
-
-    allTransactions.forEach((transaction) => {
-      const kind = transaction.transaction_kind ?? transaction.type;
-      if (kind === "transfer") {
-        applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
-        applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
-        return;
-      }
-      const sign = kind === "income" ? 1 : -1;
-      applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
-    });
-
-    return balances;
+    return buildAccountBalances(accounts, allTransactions, selectedCurrency);
   }, [accounts, allTransactions, selectedCurrency]);
 
   const accountSummary = useMemo(() => {
-    let assets = 0;
-    let liabilities = 0;
-
-    accounts.forEach((account) => {
-      if (!account.id) return;
-      if (account.currency_code && account.currency_code !== selectedCurrency) return;
-      const balance = accountBalances.get(account.id) ?? 0;
-      const accountClass =
-        account.account_class ?? (account.type === "credit" ? "liability" : "asset");
-      if (accountClass === "liability") {
-        liabilities += balance;
-      } else {
-        assets += balance;
-      }
-    });
-
-    return {
-      assets,
-      liabilities,
-      total: assets + liabilities
-    };
+    return buildAccountSummary(accounts, accountBalances, selectedCurrency);
   }, [accountBalances, accounts, selectedCurrency]);
 
   const monthTotals = useMemo(() => {
@@ -510,64 +430,13 @@ export default function InsightsPage() {
   }, [analysisTransactions, duplicateStart]);
 
   const netWorthTrend = useMemo(() => {
-    const startDate = parseISO(netWorthStart);
-    const endDate = today;
-    const balances = new Map<string, number>();
-
-    accounts.forEach((account) => {
-      if (!account.id) return;
-      if (account.currency_code && account.currency_code !== selectedCurrency) return;
-      balances.set(account.id, 0);
+    return buildNetWorthTrend({
+      accounts,
+      transactions: allTransactions,
+      startDate: netWorthStart,
+      endDate: format(today, "yyyy-MM-dd"),
+      currencyCode: selectedCurrency
     });
-
-    const applyDelta = (accountId: string | null | undefined, delta: number) => {
-      if (!accountId) return;
-      if (!balances.has(accountId)) return;
-      balances.set(accountId, (balances.get(accountId) ?? 0) + delta);
-    };
-
-    const byDate = new Map<string, TransactionWithSplits[]>();
-
-    allTransactions.forEach((transaction) => {
-      const kind = transaction.transaction_kind ?? transaction.type;
-      if (transaction.date < netWorthStart) {
-        if (kind === "transfer") {
-          applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
-          applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
-        } else {
-          const sign = kind === "income" ? 1 : -1;
-          applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
-        }
-        return;
-      }
-
-      if (transaction.date > format(endDate, "yyyy-MM-dd")) return;
-      if (!byDate.has(transaction.date)) byDate.set(transaction.date, []);
-      byDate.get(transaction.date)!.push(transaction);
-    });
-
-    const points: Array<{ date: string; balance: number }> = [];
-    let cursor = startDate;
-    while (cursor <= endDate) {
-      const dateKey = format(cursor, "yyyy-MM-dd");
-      const daily = byDate.get(dateKey) ?? [];
-      daily.forEach((transaction) => {
-        const kind = transaction.transaction_kind ?? transaction.type;
-        if (kind === "transfer") {
-          applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
-          applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
-        } else {
-          const sign = kind === "income" ? 1 : -1;
-          applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
-        }
-      });
-
-      const total = Array.from(balances.values()).reduce((sum, value) => sum + value, 0);
-      points.push({ date: format(cursor, "MMM d"), balance: Math.round(total / 100) });
-      cursor = addDays(cursor, 1);
-    }
-
-    return points;
   }, [accounts, allTransactions, netWorthStart, selectedCurrency, today]);
 
   return (
