@@ -1,7 +1,8 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { MoreHorizontal, PencilLine, Trash2, Eye, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
@@ -22,6 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { successToast } from "@/lib/feedback";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -53,6 +55,7 @@ export function TransactionsTable() {
   const deferredSearch = useDeferredValue(search);
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search");
+  const tableRef = useRef<HTMLTableElement>(null);
   const pageSize = 50;
   const hasFilters =
     deferredSearch.trim().length > 0 ||
@@ -136,6 +139,18 @@ export function TransactionsTable() {
   const paged = rows;
 
   const skeletonRows = useMemo(() => Array.from({ length: 6 }, (_, index) => index), []);
+
+  const rowVirtualizer = useVirtualizer({
+    count: paged.length,
+    getScrollElement: () => tableRef.current?.parentElement ?? null,
+    estimateSize: () => 56,
+    overscan: 8
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    rowVirtualizer.getTotalSize() -
+    (virtualRows.length > 0 ? virtualRows[virtualRows.length - 1].end : 0);
 
   useEffect(() => {
     setPage(1);
@@ -528,8 +543,16 @@ export function TransactionsTable() {
         </div>
       ) : null}
 
+      {isLoading ? (
+        <LoadingText label="Loading transactions" className="ml-1" />
+      ) : null}
+
       <div className="rounded-2xl border border-border/60 bg-card/70">
-        <Table className="min-w-[980px]">
+        <Table
+          ref={tableRef}
+          className="min-w-[980px]"
+          wrapperClassName="max-h-[70vh] lg:max-h-[640px]"
+        >
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
@@ -549,42 +572,50 @@ export function TransactionsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading
-              ? skeletonRows.map((row) => (
-                  <TableRow key={`skeleton-${row}`}>
-                    <TableCell>
-                      <Skeleton className="h-4 w-4" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-24" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-28" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-24" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-24" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-16" />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Skeleton className="ml-auto h-4 w-20" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-10" />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Skeleton className="h-8 w-12" />
-                        <Skeleton className="h-8 w-12" />
-                      </div>
-                    </TableCell>
+            {isLoading ? (
+              skeletonRows.map((row) => (
+                <TableRow key={`skeleton-${row}`}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-4" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-16" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="ml-auto h-4 w-20" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-10" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton className="h-8 w-12" />
+                      <Skeleton className="h-8 w-12" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <>
+                {paddingTop > 0 ? (
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableCell colSpan={9} style={{ height: paddingTop }} />
                   </TableRow>
-                ))
-              : paged.map((transaction) => {
+                ) : null}
+                {virtualRows.map((virtualRow) => {
+                  const transaction = paged[virtualRow.index];
                   const kind = (transaction.transaction_kind ?? transaction.type) as "income" | "expense" | "transfer";
                   const categoryName = transaction.category_id
                     ? categoryMap.get(transaction.category_id)
@@ -651,7 +682,7 @@ export function TransactionsTable() {
                       </TableCell>
                       <TableCell>
                         {kind === "transfer"
-                          ? `${fromAccount ?? "—"} → ${toAccount ?? "—"}`
+                          ? `${fromAccount ?? "-"} -> ${toAccount ?? "-"}`
                           : accountName ?? "-"}
                       </TableCell>
                       <TableCell className="capitalize">{kind}</TableCell>
@@ -721,6 +752,13 @@ export function TransactionsTable() {
                     </TableRow>
                   );
                 })}
+                {paddingBottom > 0 ? (
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableCell colSpan={9} style={{ height: paddingBottom }} />
+                  </TableRow>
+                ) : null}
+              </>
+            )}
           </TableBody>
         </Table>
       </div>
@@ -799,7 +837,7 @@ export function TransactionsTable() {
                   <p className="text-xs uppercase">Account</p>
                   <p className="text-foreground">
                     {(detailTransaction.transaction_kind ?? detailTransaction.type) === "transfer"
-                      ? `${accountMap.get(detailTransaction.from_account_id ?? "") ?? "—"} → ${accountMap.get(detailTransaction.to_account_id ?? "") ?? "—"}`
+                      ? `${accountMap.get(detailTransaction.from_account_id ?? "") ?? "-"} -> ${accountMap.get(detailTransaction.to_account_id ?? "") ?? "-"}`
                       : detailTransaction.account_id
                         ? accountMap.get(detailTransaction.account_id) ?? "-"
                         : "-"}
@@ -824,7 +862,7 @@ export function TransactionsTable() {
                 <div className="col-span-2">
                   <p className="text-xs uppercase">Notes</p>
                   <p className="text-foreground">
-                    {detailTransaction.notes?.length ? detailTransaction.notes : "—"}
+                    {detailTransaction.notes?.length ? detailTransaction.notes : "-"}
                   </p>
                 </div>
               </div>

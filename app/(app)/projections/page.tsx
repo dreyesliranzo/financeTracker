@@ -1,15 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { SavingsProjectionChart } from "@/components/charts/SavingsProjectionChart";
+const ChartFallback = () => (
+  <div className="space-y-3">
+    <LoadingText label="Loading chart" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
+
+const SavingsProjectionChart = dynamic(
+  () => import("@/components/charts/SavingsProjectionChart").then((mod) => mod.SavingsProjectionChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback />
+  }
+);
 
 const cadenceOptions = [
   { value: "daily", label: "Daily" },
@@ -48,7 +64,7 @@ export default function ProjectionsPage() {
     setSelectedCurrency(profile.default_currency);
   }, [profile?.default_currency]);
 
-  const { data: transactions = [] } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ["transactions", "summary", rangeStart, rangeEnd, selectedCurrency],
     queryFn: () =>
       fetchTransactionsSummary(
@@ -56,6 +72,8 @@ export default function ProjectionsPage() {
         selectedCurrency
       )
   });
+  const transactions = transactionsQuery.data ?? [];
+  const isLoading = transactionsQuery.isLoading;
 
   const totals = useMemo(() => {
     return transactions.reduce(
@@ -256,9 +274,16 @@ export default function ProjectionsPage() {
             <CardTitle className="text-sm text-muted-foreground">Per period</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">
-              {formatCurrency(Math.round(projection.contributionPerPeriod), selectedCurrency)}
-            </p>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading totals" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            ) : (
+              <p className="text-2xl font-semibold">
+                {formatCurrency(Math.round(projection.contributionPerPeriod), selectedCurrency)}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -266,9 +291,16 @@ export default function ProjectionsPage() {
             <CardTitle className="text-sm text-muted-foreground">Total saved</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">
-              {formatCurrency(Math.round(projection.total), selectedCurrency)}
-            </p>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading totals" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            ) : (
+              <p className="text-2xl font-semibold">
+                {formatCurrency(Math.round(projection.total), selectedCurrency)}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -276,7 +308,14 @@ export default function ProjectionsPage() {
             <CardTitle className="text-sm text-muted-foreground">Periods</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{projection.periodCount}</p>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading totals" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            ) : (
+              <p className="text-2xl font-semibold">{projection.periodCount}</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -286,7 +325,7 @@ export default function ProjectionsPage() {
           <CardTitle>Savings curve</CardTitle>
         </CardHeader>
         <CardContent>
-          <SavingsProjectionChart data={projection.points} />
+          {isLoading ? <ChartFallback /> : <SavingsProjectionChart data={projection.points} />}
         </CardContent>
       </Card>
     </div>

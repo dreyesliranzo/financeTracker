@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RecurringForm } from "@/components/forms/RecurringForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { formatDate, getNextRunDate } from "@/lib/supabase/recurring";
 import { successToast } from "@/lib/feedback";
@@ -257,6 +258,10 @@ export function RecurringTransactionsTable() {
           </CardContent>
         </Card>
       </div>
+
+      {isLoading ? (
+        <LoadingText label="Loading recurring schedules" className="ml-1" />
+      ) : null}
 
       <div className="rounded-2xl border border-border/60 bg-card/70">
         <Table className="min-w-[980px]">

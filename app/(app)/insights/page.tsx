@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,11 +9,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { fetchCategories, fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { NetTrendChart } from "@/components/charts/NetTrendChart";
 import { categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
+
+const ChartFallback = () => (
+  <div className="space-y-3">
+    <LoadingText label="Loading chart" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
+
+const NetTrendChart = dynamic(
+  () => import("@/components/charts/NetTrendChart").then((mod) => mod.NetTrendChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback />
+  }
+);
 
 export default function InsightsPage() {
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
@@ -40,7 +57,7 @@ export default function InsightsPage() {
     queryFn: fetchProfile
   });
 
-  const { data: transactionsRaw = [] } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ["transactions", previousStart, rangeEnd, selectedCurrency],
     queryFn: () =>
       fetchTransactionsSummary(
@@ -48,12 +65,15 @@ export default function InsightsPage() {
         selectedCurrency
       )
   });
-  const transactions = transactionsRaw as TransactionWithSplits[];
+  const transactions = (transactionsQuery.data ?? []) as TransactionWithSplits[];
 
-  const { data: categories = [] } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories
   });
+  const categories = categoriesQuery.data ?? [];
+
+  const isLoading = transactionsQuery.isLoading || categoriesQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -239,9 +259,16 @@ export default function InsightsPage() {
             <CardTitle>Income delta</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">
-              {formatCurrency(incomeDelta, selectedCurrency)}
-            </p>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading income" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            ) : (
+              <p className="text-2xl font-semibold">
+                {formatCurrency(incomeDelta, selectedCurrency)}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               vs previous {dayCount} days
             </p>
@@ -252,9 +279,16 @@ export default function InsightsPage() {
             <CardTitle>Expense delta</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">
-              {formatCurrency(expenseDelta, selectedCurrency)}
-            </p>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading expenses" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            ) : (
+              <p className="text-2xl font-semibold">
+                {formatCurrency(expenseDelta, selectedCurrency)}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               vs previous {dayCount} days
             </p>
@@ -267,7 +301,7 @@ export default function InsightsPage() {
           <CardTitle>Net trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <NetTrendChart data={netTrend} />
+          {isLoading ? <ChartFallback /> : <NetTrendChart data={netTrend} />}
         </CardContent>
       </Card>
 
@@ -277,56 +311,65 @@ export default function InsightsPage() {
             <CardTitle>Top categories</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {topCategories.map((item) => (
-              <Dialog key={item.categoryId}>
-                <DialogTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory(item.categoryId)}
-                    className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40"
-                  >
-                    <span>{item.category}</span>
-                    <span className="font-medium">
-                      {formatCurrency(item.amount, selectedCurrency)}
-                    </span>
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>{selectedCategoryName ?? "Category detail"}</DialogTitle>
-                  </DialogHeader>
-                  <div className="rounded-xl border border-border/60">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Merchant</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedCategoryTransactions.map((transaction) => (
-                          <TableRow key={transaction.id}>
-                            <TableCell>{transaction.date}</TableCell>
-                            <TableCell>{transaction.merchant ?? "-"}</TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(transaction.amount_cents, selectedCurrency)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {selectedCategoryTransactions.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading categories" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+            ) : (
+              topCategories.map((item) => (
+                <Dialog key={item.categoryId}>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory(item.categoryId)}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40"
+                    >
+                      <span>{item.category}</span>
+                      <span className="font-medium">
+                        {formatCurrency(item.amount, selectedCurrency)}
+                      </span>
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>{selectedCategoryName ?? "Category detail"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="rounded-xl border border-border/60">
+                      <Table>
+                        <TableHeader>
                           <TableRow>
-                            <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                              No transactions in this range.
-                            </TableCell>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Merchant</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
                           </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            ))}
+                        </TableHeader>
+                        <TableBody>
+                          {selectedCategoryTransactions.map((transaction) => (
+                            <TableRow key={transaction.id}>
+                              <TableCell>{transaction.date}</TableCell>
+                              <TableCell>{transaction.merchant ?? "-"}</TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(transaction.amount_cents, selectedCurrency)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {selectedCategoryTransactions.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                                No transactions in this range.
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ))
+            )}
           </CardContent>
         </Card>
         <Card className={cardHover}>
@@ -334,14 +377,23 @@ export default function InsightsPage() {
             <CardTitle>Top merchants</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {topMerchants.map((item) => (
-              <div key={item.merchant} className="flex items-center justify-between text-sm">
-                <span>{item.merchant}</span>
-                <span className="font-medium">
-                  {formatCurrency(item.amount, selectedCurrency)}
-                </span>
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading merchants" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-40" />
               </div>
-            ))}
+            ) : (
+              topMerchants.map((item) => (
+                <div key={item.merchant} className="flex items-center justify-between text-sm">
+                  <span>{item.merchant}</span>
+                  <span className="font-medium">
+                    {formatCurrency(item.amount, selectedCurrency)}
+                  </span>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -351,14 +403,21 @@ export default function InsightsPage() {
           <CardTitle>Weekday spend distribution</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-7">
-          {weekdaySpend.map((item) => (
-            <div key={item.day} className="rounded-xl border border-border/60 p-3 text-center">
-              <p className="text-xs text-muted-foreground">{item.day}</p>
-              <p className="mt-2 text-sm font-semibold">
-                {formatCurrency(item.amount, selectedCurrency)}
-              </p>
+          {isLoading ? (
+            <div className="col-span-full space-y-2">
+              <LoadingText label="Loading distribution" />
+              <Skeleton className="h-12 w-full" />
             </div>
-          ))}
+          ) : (
+            weekdaySpend.map((item) => (
+              <div key={item.day} className="rounded-xl border border-border/60 p-3 text-center">
+                <p className="text-xs text-muted-foreground">{item.day}</p>
+                <p className="mt-2 text-sm font-semibold">
+                  {formatCurrency(item.amount, selectedCurrency)}
+                </p>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>

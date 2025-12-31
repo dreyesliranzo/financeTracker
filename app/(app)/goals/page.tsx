@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { GoalForm } from "@/components/forms/GoalForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { currencyOptions } from "@/lib/money/currencies";
@@ -31,10 +33,12 @@ export default function GoalsPage() {
     queryFn: fetchProfile
   });
 
-  const { data: goals = [] } = useQuery({
+  const goalsQuery = useQuery({
     queryKey: ["goals", selectedCurrency],
     queryFn: () => fetchGoals(selectedCurrency)
   });
+  const goals = goalsQuery.data ?? [];
+  const isLoading = goalsQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -142,7 +146,14 @@ export default function GoalsPage() {
         </div>
       </div>
 
-      {sortedGoals.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-3 rounded-2xl border border-border/60 bg-card/70 p-6">
+          <LoadingText label="Loading goals" />
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-2 w-full" />
+        </div>
+      ) : sortedGoals.length === 0 ? (
         <EmptyState
           title="No goals yet"
           description="Set a savings or payoff goal to track progress."

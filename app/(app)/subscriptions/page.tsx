@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Stagger } from "@/components/layout/Stagger";
 import { EmptyState } from "@/components/empty/EmptyState";
@@ -191,7 +192,10 @@ export default function SubscriptionsPage() {
           </CardHeader>
           <CardContent>
             {subscriptionsQuery.isLoading ? (
-              <Skeleton className="h-8 w-32" />
+              <div className="space-y-2">
+                <LoadingText label="Loading totals" />
+                <Skeleton className="h-8 w-32" />
+              </div>
             ) : (
               <div className="text-2xl font-semibold">
                 {formatCurrency(totalMonthly, profile?.default_currency ?? "USD")}
@@ -209,6 +213,7 @@ export default function SubscriptionsPage() {
           <CardContent className="space-y-2 text-sm">
             {subscriptionsQuery.isLoading ? (
               <>
+                <LoadingText label="Loading list" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-4/5" />
                 <Skeleton className="h-4 w-3/4" />
@@ -248,23 +253,17 @@ export default function SubscriptionsPage() {
                 {subscriptionsQuery.isLoading
                   ? Array.from({ length: 5 }, (_, index) => (
                       <TableRow key={`skeleton-${index}`}>
-                        <TableCell>
-                          <Skeleton className="h-4 w-28" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-16" />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Skeleton className="ml-auto h-4 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-20" />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Skeleton className="ml-auto h-8 w-10" />
+                        <TableCell colSpan={6}>
+                          {index === 0 ? (
+                            <div className="mb-2">
+                              <LoadingText label="Loading subscriptions" />
+                            </div>
+                          ) : null}
+                          <div className="grid gap-2">
+                            <Skeleton className="h-4 w-28" />
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-4 w-20" />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

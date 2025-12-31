@@ -49,7 +49,27 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   );
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
-  const invalidateTimers = useRef(new Map<string, number>());
+  const invalidateTimer = useRef<number | null>(null);
+  const pendingTables = useRef(new Set<string>());
+
+  const scheduleInvalidate = useCallback(
+    (table: string) => {
+      pendingTables.current.add(table);
+      if (invalidateTimer.current) return;
+      invalidateTimer.current = window.setTimeout(() => {
+        pendingTables.current.forEach((tableName) => {
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === tableName
+          });
+        });
+        pendingTables.current.clear();
+        invalidateTimer.current = null;
+        setLastSync(Date.now());
+      }, 900);
+    },
+    [queryClient]
+  );
 
   useEffect(() => {
     if (!user) {
@@ -70,16 +90,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`
         },
         () => {
-          if (invalidateTimers.current.has(table)) return;
-          const timer = window.setTimeout(() => {
-            queryClient.invalidateQueries({
-              predicate: (query) =>
-                Array.isArray(query.queryKey) && query.queryKey[0] === table
-            });
-            setLastSync(Date.now());
-            invalidateTimers.current.delete(table);
-          }, 300);
-          invalidateTimers.current.set(table, timer);
+          scheduleInvalidate(table);
         }
       );
     });
@@ -107,10 +118,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      invalidateTimers.current.forEach((timer) => window.clearTimeout(timer));
-      invalidateTimers.current.clear();
+      if (invalidateTimer.current) {
+        window.clearTimeout(invalidateTimer.current);
+        invalidateTimer.current = null;
+      }
+      pendingTables.current.clear();
     };
-  }, [queryClient, user, version]);
+  }, [queryClient, scheduleInvalidate, user, version]);
 
   const retry = useCallback(() => {
     setStatus("reconnecting");

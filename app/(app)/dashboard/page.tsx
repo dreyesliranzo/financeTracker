@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import {
   fetchBudgets,
   fetchCategories,
@@ -20,8 +22,6 @@ import {
 } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { ExpenseByCategoryChart } from "@/components/charts/ExpenseByCategoryChart";
-import { CashflowChart } from "@/components/charts/CashflowChart";
 import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
 import { GoalProgressList } from "@/components/charts/GoalProgressList";
 import { OnboardingChecklist } from "@/components/empty/OnboardingChecklist";
@@ -32,6 +32,32 @@ import { TransactionForm } from "@/components/forms/TransactionForm";
 import { Stagger } from "@/components/layout/Stagger";
 import { sumIncomeExpense, categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
 import { estimateMonthlyCents } from "@/lib/utils/subscriptions";
+
+const ChartFallback = () => (
+  <div className="space-y-3">
+    <LoadingText label="Loading chart" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
+
+const ExpenseByCategoryChart = dynamic(
+  () =>
+    import("@/components/charts/ExpenseByCategoryChart").then(
+      (mod) => mod.ExpenseByCategoryChart
+    ),
+  {
+    ssr: false,
+    loading: () => <ChartFallback />
+  }
+);
+
+const CashflowChart = dynamic(
+  () => import("@/components/charts/CashflowChart").then((mod) => mod.CashflowChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback />
+  }
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -380,7 +406,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <Skeleton className="h-8 w-28" />
+                <div className="space-y-2">
+                  <LoadingText label="Loading total" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
               ) : (
                 <div className="text-2xl font-semibold">
                   {formatCurrency(net, selectedCurrency)}
@@ -394,7 +423,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <Skeleton className="h-8 w-28" />
+                <div className="space-y-2">
+                  <LoadingText label="Loading income" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
               ) : (
                 <div className="text-2xl font-semibold text-emerald-400">
                   {formatCurrency(income, selectedCurrency)}
@@ -408,7 +440,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <Skeleton className="h-8 w-28" />
+                <div className="space-y-2">
+                  <LoadingText label="Loading expenses" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
               ) : (
                 <div className="text-2xl font-semibold text-rose-400">
                   {formatCurrency(expense, selectedCurrency)}
@@ -424,7 +459,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <Skeleton className="h-8 w-28" />
+                <div className="space-y-2">
+                  <LoadingText label="Loading budget" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
               ) : (
                 <div>
                   <div className="text-2xl font-semibold">
@@ -442,43 +480,50 @@ export default function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
             <CardHeader>
-              <CardTitle>Expenses by category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
+            <CardTitle>Expenses by category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <LoadingText label="Loading chart" />
                 <Skeleton className="h-64 w-full" />
-              ) : (
-                <ExpenseByCategoryChart data={expenseByCategory} />
-              )}
-            </CardContent>
-          </Card>
-          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-            <CardHeader>
-              <CardTitle>Cashflow</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
+              </div>
+            ) : (
+              <ExpenseByCategoryChart data={expenseByCategory} />
+            )}
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+          <CardHeader>
+            <CardTitle>Cashflow</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <LoadingText label="Loading chart" />
                 <Skeleton className="h-64 w-full" />
-              ) : (
-                <CashflowChart data={cashflowData} />
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            ) : (
+              <CashflowChart data={cashflowData} />
+            )}
+          </CardContent>
+        </Card>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
             <CardHeader>
-              <CardTitle>Budget progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : budgetProgress.length > 0 ? (
+            <CardTitle>Budget progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <LoadingText label="Loading budgets" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : budgetProgress.length > 0 ? (
                 <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -489,17 +534,18 @@ export default function DashboardPage() {
           </Card>
           <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
             <CardHeader>
-              <CardTitle>Goals progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : goalProgress.length > 0 ? (
-                <GoalProgressList items={goalProgress} currencyCode={selectedCurrency} />
-              ) : (
+            <CardTitle>Goals progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <LoadingText label="Loading goals" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : goalProgress.length > 0 ? (
+              <GoalProgressList items={goalProgress} currencyCode={selectedCurrency} />
+            ) : (
                 <p className="text-sm text-muted-foreground">
                   Create goals to track progress here.
                 </p>
@@ -508,15 +554,16 @@ export default function DashboardPage() {
           </Card>
           <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
             <CardHeader>
-              <CardTitle>Subscriptions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-8 w-32" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-4/5" />
-                </div>
+            <CardTitle>Subscriptions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <LoadingText label="Loading subscriptions" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
               ) : subscriptions.length > 0 ? (
                 <div className="space-y-3">
                   <div>

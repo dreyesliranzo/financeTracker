@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingText } from "@/components/ui/LoadingText";
 import {
   fetchAccounts,
   fetchBudgets,
@@ -313,7 +314,13 @@ export default function BudgetsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {overallBudget ? (
+          {isLoading ? (
+            <div className="space-y-2">
+              <LoadingText label="Loading budget" />
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-2 w-full" />
+            </div>
+          ) : overallBudget ? (
             <>
               <p className="text-sm text-muted-foreground">
                 {formatCurrency(overallSpent, selectedCurrency)} of{" "}
@@ -378,6 +385,7 @@ export default function BudgetsPage() {
           ? Array.from({ length: 4 }).map((_, index) => (
               <Card key={`budget-skeleton-${index}`} className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
                 <CardHeader className="space-y-2">
+                  <LoadingText label="Loading budget" />
                   <Skeleton className="h-5 w-32" />
                   <Skeleton className="h-4 w-44" />
                 </CardHeader>
