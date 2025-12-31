@@ -3,10 +3,10 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { formatSignedCurrency } from "@/lib/money";
+import { formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactionsPage } from "@/lib/supabase/queries";
-import { bulkDeleteTransactions, deleteTransaction } from "@/lib/supabase/mutations";
+import { bulkDeleteTransactions, deleteTransaction, updateTransaction } from "@/lib/supabase/mutations";
 import type { Transaction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { showSuccessToast } from "@/lib/toast";
+import Link from "next/link";
 
 const sortOptions = [
   { value: "date", label: "Date" },
@@ -36,6 +38,8 @@ export function TransactionsTable() {
   const [sortKey, setSortKey] = useState("date");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineValues, setInlineValues] = useState({ merchant: "", amount: "" });
   const [page, setPage] = useState(1);
   const deferredSearch = useDeferredValue(search);
   const pageSize = 50;
@@ -146,6 +150,39 @@ export function TransactionsTable() {
     );
   };
 
+  const startInlineEdit = (transaction: Transaction) => {
+    setInlineEditId(transaction.id ?? null);
+    setInlineValues({
+      merchant: transaction.merchant ?? "",
+      amount: (transaction.amount_cents / 100).toFixed(2)
+    });
+  };
+
+  const cancelInlineEdit = () => {
+    setInlineEditId(null);
+    setInlineValues({ merchant: "", amount: "" });
+  };
+
+  const saveInlineEdit = async () => {
+    if (!inlineEditId) return;
+    try {
+      await updateTransaction(inlineEditId, {
+        merchant: inlineValues.merchant.trim() || null,
+        amount_cents: Math.abs(parseCurrencyToCents(inlineValues.amount))
+      });
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      showSuccessToast("Transaction updated");
+      cancelInlineEdit();
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to update transaction");
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
       await deleteTransaction(id);
@@ -196,6 +233,14 @@ export function TransactionsTable() {
             </DialogContent>
           </Dialog>
         }
+        secondaryAction={
+          !hasFilters ? (
+            <Button variant="secondary" asChild>
+              <Link href="/settings">Import CSV</Link>
+            </Button>
+          ) : undefined
+        }
+        note={!hasFilters ? "Tip: Import a CSV to jumpstart your dashboard." : undefined}
       />
     );
   }
@@ -391,27 +436,74 @@ export function TransactionsTable() {
                         />
                       </TableCell>
                       <TableCell>{transaction.date}</TableCell>
-                      <TableCell>{transaction.merchant ?? "-"}</TableCell>
+                      <TableCell>
+                        {inlineEditId === transaction.id ? (
+                          <Input
+                            value={inlineValues.merchant}
+                            onChange={(event) =>
+                              setInlineValues((prev) => ({
+                                ...prev,
+                                merchant: event.target.value
+                              }))
+                            }
+                          />
+                        ) : (
+                          transaction.merchant ?? "-"
+                        )}
+                      </TableCell>
                       <TableCell>{categoryName ?? "-"}</TableCell>
                       <TableCell>{accountName ?? "-"}</TableCell>
                       <TableCell className="capitalize">{transaction.type}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatSignedCurrency(
-                          transaction.amount_cents,
-                          transaction.type,
-                          transaction.currency_code ?? "USD"
+                        {inlineEditId === transaction.id ? (
+                          <Input
+                            value={inlineValues.amount}
+                            onChange={(event) =>
+                              setInlineValues((prev) => ({
+                                ...prev,
+                                amount: event.target.value
+                              }))
+                            }
+                            className="max-w-[120px] text-right"
+                          />
+                        ) : (
+                          formatSignedCurrency(
+                            transaction.amount_cents,
+                            transaction.type,
+                            transaction.currency_code ?? "USD"
+                          )
                         )}
                       </TableCell>
                       <TableCell>{transaction.currency_code ?? "USD"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditing(transaction)}
-                          >
-                            Edit
-                          </Button>
+                          {inlineEditId === transaction.id ? (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={saveInlineEdit}>
+                                Save
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={cancelInlineEdit}>
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startInlineEdit(transaction)}
+                              >
+                                Quick edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditing(transaction)}
+                              >
+                                Edit
+                              </Button>
+                            </>
+                          )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="sm">

@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Plus } from "lucide-react";
+import { Menu, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -103,6 +103,15 @@ export function Topbar() {
 
       <div className="flex items-center gap-3">
         <SyncStatus />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full"
+          onClick={() => window.dispatchEvent(new Event("app:global-search"))}
+          aria-label="Open search"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">

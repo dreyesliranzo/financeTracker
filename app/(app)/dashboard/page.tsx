@@ -10,10 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchBudgets,
   fetchCategories,
+  fetchAccounts,
   fetchGoals,
   fetchOverallBudgets,
   fetchProfile,
-  fetchTransactionsSummary
+  fetchTransactionsSummary,
+  fetchRecurringTransactions
 } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
@@ -21,6 +23,11 @@ import { ExpenseByCategoryChart } from "@/components/charts/ExpenseByCategoryCha
 import { CashflowChart } from "@/components/charts/CashflowChart";
 import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
 import { GoalProgressList } from "@/components/charts/GoalProgressList";
+import { OnboardingChecklist } from "@/components/empty/OnboardingChecklist";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { TransactionForm } from "@/components/forms/TransactionForm";
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -49,6 +56,12 @@ export default function DashboardPage() {
   });
   const categories = categoriesQuery.data ?? [];
 
+  const accountsQuery = useQuery({
+    queryKey: ["accounts"],
+    queryFn: fetchAccounts
+  });
+  const accounts = accountsQuery.data ?? [];
+
   const budgetsQuery = useQuery({
     queryKey: ["budgets", month, selectedCurrency],
     queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
@@ -67,12 +80,20 @@ export default function DashboardPage() {
   });
   const goals = goalsQuery.data ?? [];
 
+  const recurringQuery = useQuery({
+    queryKey: ["recurring_transactions"],
+    queryFn: fetchRecurringTransactions
+  });
+  const recurring = recurringQuery.data ?? [];
+
   const isLoading =
     transactionsQuery.isLoading ||
     budgetsQuery.isLoading ||
     categoriesQuery.isLoading ||
+    accountsQuery.isLoading ||
     overallBudgetsQuery.isLoading ||
-    goalsQuery.isLoading;
+    goalsQuery.isLoading ||
+    recurringQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -183,6 +204,102 @@ export default function DashboardPage() {
       .slice(0, 4);
   }, [goals]);
 
+  const notifications = useMemo(() => {
+    const items: Array<{ title: string; detail: string }> = [];
+
+    budgetProgress.forEach((item) => {
+      if (!item.limit) return;
+      const ratio = item.spent / item.limit;
+      if (ratio >= 0.8) {
+        items.push({
+          title: `Budget alert: ${item.category}`,
+          detail: `${Math.round(ratio * 100)}% used`
+        });
+      }
+    });
+
+    goals.forEach((goal) => {
+      if (!goal.target_cents) return;
+      const ratio = goal.current_cents / goal.target_cents;
+      if (ratio >= 0.8 && ratio < 1) {
+        items.push({
+          title: `Goal nearing: ${goal.name}`,
+          detail: `${Math.round(ratio * 100)}% complete`
+        });
+      }
+    });
+
+    const upcoming = recurring.filter((item) => item.active && item.next_run);
+    const today = new Date();
+    upcoming.forEach((item) => {
+      const runDate = new Date(item.next_run);
+      const diff = runDate.getTime() - today.getTime();
+      if (diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000) {
+        items.push({
+          title: "Upcoming recurring",
+          detail: `${item.name || item.merchant || "Recurring"} due ${item.next_run}`
+        });
+      }
+    });
+
+    return items.slice(0, 4);
+  }, [budgetProgress, goals, recurring]);
+
+  const onboardingItems = useMemo(() => {
+    return [
+      {
+        label: "Add your first account",
+        done: accounts.length > 0,
+        action: accounts.length === 0 ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link href="/settings">Go</Link>
+          </Button>
+        ) : undefined
+      },
+      {
+        label: "Create categories",
+        done: categories.length > 0,
+        action: categories.length === 0 ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link href="/settings">Go</Link>
+          </Button>
+        ) : undefined
+      },
+      {
+        label: "Add a transaction",
+        done: transactions.length > 0,
+        action: transactions.length === 0 ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="secondary" size="sm">Add</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <TransactionForm />
+            </DialogContent>
+          </Dialog>
+        ) : undefined
+      },
+      {
+        label: "Set a budget",
+        done: budgets.length > 0,
+        action: budgets.length === 0 ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link href="/budgets">Go</Link>
+          </Button>
+        ) : undefined
+      },
+      {
+        label: "Create a goal",
+        done: goals.length > 0,
+        action: goals.length === 0 ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link href="/goals">Go</Link>
+          </Button>
+        ) : undefined
+      }
+    ];
+  }, [accounts.length, budgets.length, categories.length, goals.length, transactions.length]);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -219,6 +336,29 @@ export default function DashboardPage() {
           </Select>
         </div>
       </div>
+
+      <OnboardingChecklist
+        title="Getting started"
+        description="Complete these steps to personalize your workspace."
+        items={onboardingItems}
+      />
+
+      {notifications.length > 0 ? (
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+          <p className="text-sm font-medium text-foreground">Notifications</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {notifications.map((item) => (
+              <div
+                key={`${item.title}-${item.detail}`}
+                className="rounded-xl border border-border/60 px-3 py-2 text-sm"
+              >
+                <p className="font-medium">{item.title}</p>
+                <p className="text-xs text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">

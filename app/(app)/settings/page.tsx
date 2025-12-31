@@ -89,6 +89,59 @@ export default function SettingsPage() {
     return csvData.slice(0, 5);
   }, [csvData]);
 
+  const csvStep = useMemo(() => {
+    if (csvHeaders.length === 0) return 1;
+    if (!mappingComplete) return 2;
+    return 3;
+  }, [csvHeaders.length, mappingComplete]);
+
+  const csvSummary = useMemo(() => {
+    if (!mappingComplete || csvData.length === 0) {
+      return { total: csvData.length, missingRequired: 0, duplicates: 0 };
+    }
+    const missingRequired = csvData.filter((row) =>
+      requiredCsvFields.some((field) => !row[mapping[field]])
+    ).length;
+
+    const existingKeys = new Set(
+      transactions.map((transaction) =>
+        makeTransactionKey({
+          date: transaction.date,
+          amount: transaction.amount_cents,
+          type: transaction.type,
+          accountId: transaction.account_id,
+          categoryId: transaction.category_id,
+          merchant: transaction.merchant ?? ""
+        })
+      )
+    );
+
+    const duplicateCount = csvData.reduce((acc, row) => {
+      const dateValue = row[mapping.date];
+      const amountValue = row[mapping.amount];
+      if (!dateValue || !amountValue) return acc;
+      const amountCents = Math.abs(parseCurrencyToCents(amountValue));
+      const inferredType = amountValue.trim().startsWith("-") ? "expense" : "income";
+      const typeValue = mapping.type ? row[mapping.type]?.toLowerCase() : inferredType;
+      const type = typeValue?.includes("income") ? "income" : "expense";
+      const key = makeTransactionKey({
+        date: dateValue,
+        amount: amountCents,
+        type,
+        accountId: null,
+        categoryId: null,
+        merchant: mapping.merchant ? row[mapping.merchant] : null
+      });
+      return existingKeys.has(key) ? acc + 1 : acc;
+    }, 0);
+
+    return {
+      total: csvData.length,
+      missingRequired,
+      duplicates: duplicateCount
+    };
+  }, [csvData, mapping, mappingComplete, transactions]);
+
   const categoryNameMap = useMemo(() => {
     return new Map(
       categories
@@ -599,6 +652,13 @@ export default function SettingsPage() {
                 <Input type="file" accept=".csv" onChange={(event) => handleCsvFile(event.target.files?.[0])} />
                 {csvHeaders.length > 0 ? (
                   <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
+                      <span className={csvStep >= 1 ? "text-foreground" : ""}>1. Upload</span>
+                      <span>-</span>
+                      <span className={csvStep >= 2 ? "text-foreground" : ""}>2. Map</span>
+                      <span>-</span>
+                      <span className={csvStep >= 3 ? "text-foreground" : ""}>3. Review</span>
+                    </div>
                     <p className="text-xs text-muted-foreground">Map your columns</p>
                     {requiredCsvFields.map((field) => (
                       <div key={field} className="space-y-2">
@@ -678,6 +738,25 @@ export default function SettingsPage() {
                               ))}
                             </TableBody>
                           </Table>
+                        </div>
+                      </div>
+                    ) : null}
+                    {mappingComplete ? (
+                      <div className="rounded-xl border border-border/60 p-3 text-sm">
+                        <p className="font-medium">Validation summary</p>
+                        <div className="mt-2 grid gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center justify-between">
+                            <span>Total rows</span>
+                            <span className="text-foreground">{csvSummary.total}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Missing required fields</span>
+                            <span className="text-foreground">{csvSummary.missingRequired}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Possible duplicates</span>
+                            <span className="text-foreground">{csvSummary.duplicates}</span>
+                          </div>
                         </div>
                       </div>
                     ) : null}

@@ -50,16 +50,32 @@ export function TransactionForm({
     queryFn: fetchProfile
   });
   const defaultCurrency = profile?.default_currency ?? "USD";
+  const storageKey = "ledgerly:transaction-defaults";
+  const savedDefaults = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as {
+        account_id?: string;
+        category_id?: string;
+        type?: "income" | "expense";
+        currency_code?: TransactionFormValues["currency_code"];
+      };
+    } catch {
+      return null;
+    }
+  }, []);
 
   const defaultValues = useMemo<TransactionFormValues>(() => {
     if (!transaction) {
       return {
         date: new Date().toISOString().slice(0, 10),
         amount: "",
-        type: "expense",
-        category_id: "",
-        account_id: "",
-        currency_code: defaultCurrency,
+        type: savedDefaults?.type ?? "expense",
+        category_id: savedDefaults?.category_id ?? "",
+        account_id: savedDefaults?.account_id ?? "",
+        currency_code: savedDefaults?.currency_code ?? defaultCurrency,
         merchant: "",
         notes: "",
         tags: ""
@@ -88,6 +104,16 @@ export function TransactionForm({
   useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues, form]);
+
+  useEffect(() => {
+    if (transaction) return;
+    if (savedDefaults?.account_id && !accounts.some((item) => item.id === savedDefaults.account_id)) {
+      form.setValue("account_id", "");
+    }
+    if (savedDefaults?.category_id && !categories.some((item) => item.id === savedDefaults.category_id)) {
+      form.setValue("category_id", "");
+    }
+  }, [accounts, categories, form, savedDefaults, transaction]);
 
   useEffect(() => {
     if (!accountId) return;
@@ -135,6 +161,17 @@ export function TransactionForm({
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      if (!transaction && typeof window !== "undefined") {
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            account_id: values.account_id || undefined,
+            category_id: values.category_id || undefined,
+            type: values.type,
+            currency_code: values.currency_code
+          })
+        );
+      }
       form.reset(defaultValues);
       onSuccess?.();
     } catch (error) {
