@@ -201,11 +201,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(2, 6, 23, 0.4);
+    background: rgba(2, 6, 23, 0.55);
     backdrop-filter: blur(8px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 200ms ease;
+    transition: opacity 240ms ease;
   }
 
   .success-overlay.is-visible {
@@ -214,14 +214,70 @@
   }
 
   .success-overlay-card {
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(10px) scale(0.96);
     opacity: 0;
-    transition: transform 240ms ease, opacity 240ms ease;
+    transition: transform 320ms ease, opacity 320ms ease;
   }
 
   .success-overlay.is-visible .success-overlay-card {
     transform: translateY(0) scale(1);
     opacity: 1;
+  }
+
+  .success-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .success-hero-ring {
+    width: 160px;
+    height: 160px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: rgba(16, 185, 129, 0.12);
+    box-shadow:
+      0 0 0 1px rgba(16, 185, 129, 0.2),
+      0 28px 60px -38px rgba(16, 185, 129, 0.6);
+  }
+
+  .success-hero-svg {
+    width: 120px;
+    height: 120px;
+  }
+
+  .success-hero-circle {
+    fill: none;
+    stroke: rgba(16, 185, 129, 0.6);
+    stroke-width: 6;
+    stroke-dasharray: 302;
+    stroke-dashoffset: 302;
+    animation: success-circle 720ms ease-out forwards;
+  }
+
+  .success-hero-check {
+    fill: none;
+    stroke: #10b981;
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 60;
+    stroke-dashoffset: 60;
+    animation: success-check 520ms ease-out 220ms forwards;
+  }
+
+  .success-hero-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .success-hero-description {
+    font-size: 0.9rem;
+    color: hsl(var(--muted-foreground));
   }
 }
 
@@ -262,6 +318,12 @@
   }
 }
 
+@keyframes success-circle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @keyframes success-ring {
   from {
     transform: scale(0.6);
@@ -289,7 +351,9 @@
   .success-toast-icon::after,
   .success-toast-check-path,
   .success-overlay,
-  .success-overlay-card {
+  .success-overlay-card,
+  .success-hero-circle,
+  .success-hero-check {
     animation: none;
     transition: none;
   }

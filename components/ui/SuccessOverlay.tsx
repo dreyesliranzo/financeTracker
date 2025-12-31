@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SuccessToast } from "@/components/ui/SuccessToast";
-
 type SuccessPayload = {
   title: string;
   description?: string;
@@ -26,8 +24,8 @@ export function SuccessOverlay() {
 
       setPayload(detail);
       window.requestAnimationFrame(() => setVisible(true));
-      hideTimer.current = window.setTimeout(() => setVisible(false), 1500);
-      clearTimer.current = window.setTimeout(() => setPayload(null), 1900);
+      hideTimer.current = window.setTimeout(() => setVisible(false), 1800);
+      clearTimer.current = window.setTimeout(() => setPayload(null), 2300);
     };
 
     window.addEventListener(EVENT_NAME, handle as EventListener);
@@ -46,7 +44,23 @@ export function SuccessOverlay() {
       onClick={() => setVisible(false)}
     >
       <div className="success-overlay-card" onClick={(event) => event.stopPropagation()}>
-        <SuccessToast title={payload.title} description={payload.description} />
+        <div className="success-hero">
+          <div className="success-hero-ring" aria-hidden="true">
+            <svg className="success-hero-svg" viewBox="0 0 120 120">
+              <circle className="success-hero-circle" cx="60" cy="60" r="48" />
+              <path
+                className="success-hero-check"
+                d="M36 62l16 16 32-34"
+              />
+            </svg>
+          </div>
+          <div className="success-hero-text">
+            <p className="success-hero-title">{payload.title}</p>
+            {payload.description ? (
+              <p className="success-hero-description">{payload.description}</p>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
