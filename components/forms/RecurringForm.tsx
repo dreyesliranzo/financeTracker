@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { showSuccessToast } from "@/lib/toast";
 
 const cadenceOptions = [
   { value: "daily", label: "Daily" },
@@ -148,10 +149,10 @@ export function RecurringForm({
     try {
       if (recurring?.id) {
         await updateRecurringTransaction(recurring.id, payload);
-        toast.success("Recurring transaction updated");
+        showSuccessToast("Recurring transaction updated");
       } else {
         await createRecurringTransaction(user.id, payload);
-        toast.success("Recurring transaction created");
+        showSuccessToast("Recurring transaction created");
       }
       queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
       onSuccess?.();

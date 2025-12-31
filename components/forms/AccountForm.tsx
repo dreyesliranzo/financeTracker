@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { showSuccessToast } from "@/lib/toast";
 
 const accountTypes = [
   { value: "checking", label: "Checking" },
@@ -71,10 +72,10 @@ export function AccountForm({
     try {
       if (account?.id) {
         await updateAccount(account.id, values);
-        toast.success("Account updated");
+        showSuccessToast("Account updated");
       } else {
         await createAccount(user.id, values);
-        toast.success("Account created");
+        showSuccessToast("Account created");
       }
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       onSuccess?.();

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signInWithPassword } from "@/lib/supabase/auth";
+import { showSuccessToast } from "@/lib/toast";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -32,7 +33,7 @@ export default function LoginPage() {
       toast.error(error.message);
       return;
     }
-    toast.success("Welcome back!");
+    showSuccessToast("Login successful", "Welcome back!");
     router.push("/dashboard" as Route);
     router.refresh();
   });

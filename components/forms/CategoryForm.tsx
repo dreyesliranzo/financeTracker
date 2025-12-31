@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { showSuccessToast } from "@/lib/toast";
 
 export function CategoryForm({
   category,
@@ -47,10 +48,10 @@ export function CategoryForm({
     try {
       if (category?.id) {
         await updateCategory(category.id, values);
-        toast.success("Category updated");
+        showSuccessToast("Category updated");
       } else {
         await createCategory(user.id, values);
-        toast.success("Category created");
+        showSuccessToast("Category created");
       }
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       onSuccess?.();
