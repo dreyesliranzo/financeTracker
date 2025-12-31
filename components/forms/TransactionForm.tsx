@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 
 export function TransactionForm({
   transaction,
@@ -151,10 +151,10 @@ export function TransactionForm({
     try {
       if (transaction?.id) {
         await updateTransaction(transaction.id, payload);
-        showSuccessToast("Transaction updated");
+        successToast("Transaction updated");
       } else {
         await createTransaction(user.id, payload);
-        showSuccessToast("Transaction added");
+        successToast("Transaction added");
       }
       queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });

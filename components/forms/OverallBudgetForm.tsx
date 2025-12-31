@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 
 export function OverallBudgetForm({
   budget,
@@ -74,10 +74,10 @@ export function OverallBudgetForm({
     try {
       if (budget?.id) {
         await updateOverallBudget(budget.id, payload);
-        showSuccessToast("General budget updated");
+        successToast("Budget saved", "General budget updated");
       } else {
         await createOverallBudget(user.id, payload);
-        showSuccessToast("General budget created");
+        successToast("Budget saved", "General budget created");
       }
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });

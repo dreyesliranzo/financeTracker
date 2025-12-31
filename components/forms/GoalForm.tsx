@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 
 export function GoalForm({
   goal,
@@ -76,10 +76,10 @@ export function GoalForm({
     try {
       if (goal?.id) {
         await updateGoal(goal.id, payload);
-        showSuccessToast("Goal updated");
+        successToast("Goal updated");
       } else {
         await createGoal(user.id, payload);
-        showSuccessToast("Goal created");
+        successToast("Goal created");
       }
       queryClient.invalidateQueries({ queryKey: ["goals"] });
       onSuccess?.();

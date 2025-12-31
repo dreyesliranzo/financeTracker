@@ -16,7 +16,7 @@ import { currencyOptions } from "@/lib/money/currencies";
 import { formatCurrency, parseCurrencyToCents } from "@/lib/money";
 import { fetchGoals, fetchProfile } from "@/lib/supabase/queries";
 import { deleteGoal, updateGoal } from "@/lib/supabase/mutations";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 
 export default function GoalsPage() {
   const queryClient = useQueryClient();
@@ -69,7 +69,7 @@ export default function GoalsPage() {
         current_cents: progressGoal.current + amountCents
       });
       queryClient.invalidateQueries({ queryKey: ["goals"] });
-      showSuccessToast("Progress added");
+      successToast("Progress added");
       setProgressAmount("");
       setProgressGoal(null);
     } catch (error) {

@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 
 export function BudgetForm({
   budget,
@@ -77,10 +77,10 @@ export function BudgetForm({
     try {
       if (budget?.id) {
         await updateBudget(budget.id, payload);
-        showSuccessToast("Budget updated");
+        successToast("Budget saved");
       } else {
         await createBudget(user.id, payload);
-        showSuccessToast("Budget created");
+        successToast("Budget saved");
       }
       queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });

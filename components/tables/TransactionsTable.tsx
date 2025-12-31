@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import { showSuccessToast } from "@/lib/toast";
+import { successToast } from "@/lib/feedback";
 import { useRouter } from "next/navigation";
 
 const sortOptions = [
@@ -176,7 +176,7 @@ export function TransactionsTable() {
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
-      showSuccessToast("Transaction updated");
+      successToast("Transaction updated");
       cancelInlineEdit();
     } catch (error) {
       console.error(error);
@@ -192,7 +192,7 @@ export function TransactionsTable() {
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
-      toast.success("Transaction deleted");
+      successToast("Transaction deleted");
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete transaction");
@@ -208,7 +208,7 @@ export function TransactionsTable() {
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
-      toast.success("Transactions deleted");
+      successToast("Transactions deleted");
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete transactions");

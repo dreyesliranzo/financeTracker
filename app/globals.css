@@ -137,144 +137,75 @@
     transform: translateY(-2px);
   }
 
-  .success-toast {
+  .success-toast-card {
     display: flex;
     gap: 12px;
-    align-items: flex-start;
+    align-items: center;
     border-radius: 14px;
     padding: 12px 14px;
     border: 1px solid hsl(var(--border));
     background: hsl(var(--card));
     box-shadow: 0 18px 40px -28px rgba(15, 23, 42, 0.65);
-    width: min(360px, calc(100vw - 32px));
+    width: min(380px, calc(100vw - 32px));
     animation: toast-pop 220ms ease-out both;
+    cursor: pointer;
   }
 
-  .success-toast-icon {
-    position: relative;
-    width: 32px;
-    height: 32px;
+  .success-toast-card:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .success-ring {
+    width: 36px;
+    height: 36px;
     border-radius: 999px;
     display: grid;
     place-items: center;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.16);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
     flex-shrink: 0;
   }
 
-  .success-toast-icon::after {
-    content: "";
-    position: absolute;
-    inset: -6px;
-    border-radius: 999px;
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    animation: success-ring 720ms ease-out both;
+  .success-ring-svg {
+    width: 28px;
+    height: 28px;
   }
 
-  .success-toast-check {
-    width: 18px;
-    height: 18px;
+  .success-ring-circle {
+    fill: none;
+    stroke: rgba(16, 185, 129, 0.6);
+    stroke-width: 3.5;
+    stroke-dasharray: 113;
+    stroke-dashoffset: 113;
+    animation: success-ring-draw 540ms ease-out forwards;
   }
 
-  .success-toast-check-path {
+  .success-ring-check {
+    fill: none;
+    stroke: #10b981;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     stroke-dasharray: 24;
     stroke-dashoffset: 24;
-    animation: success-check 520ms ease-out 120ms forwards;
+    animation: success-check-draw 420ms ease-out 140ms forwards;
+  }
+
+  .success-toast-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .success-toast-title {
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     font-weight: 600;
     color: hsl(var(--foreground));
   }
 
   .success-toast-description {
     font-size: 0.78rem;
-    color: hsl(var(--muted-foreground));
-    margin-top: 2px;
-  }
-
-  .success-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(2, 6, 23, 0.4);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 240ms ease;
-  }
-
-  .success-overlay.is-visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .success-overlay-card {
-    transform: translateY(10px) scale(0.96);
-    opacity: 0;
-    transition: transform 320ms ease, opacity 320ms ease;
-    will-change: transform, opacity;
-  }
-
-  .success-overlay.is-visible .success-overlay-card {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-
-  .success-hero {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    text-align: center;
-  }
-
-  .success-hero-ring {
-    width: 140px;
-    height: 140px;
-    border-radius: 999px;
-    display: grid;
-    place-items: center;
-    background: rgba(16, 185, 129, 0.12);
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2);
-  }
-
-  .success-hero-svg {
-    width: 110px;
-    height: 110px;
-  }
-
-  .success-hero-circle {
-    fill: none;
-    stroke: rgba(16, 185, 129, 0.6);
-    stroke-width: 6;
-    stroke-dasharray: 290;
-    stroke-dashoffset: 290;
-    animation: success-circle 640ms ease-out forwards;
-  }
-
-  .success-hero-check {
-    fill: none;
-    stroke: #10b981;
-    stroke-width: 7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-dasharray: 60;
-    stroke-dashoffset: 60;
-    animation: success-check 460ms ease-out 200ms forwards;
-  }
-
-  .success-hero-title {
-    font-size: 1.15rem;
-    font-weight: 600;
-    color: hsl(var(--foreground));
-  }
-
-  .success-hero-description {
-    font-size: 0.9rem;
     color: hsl(var(--muted-foreground));
   }
 }
@@ -310,26 +241,15 @@
   }
 }
 
-@keyframes success-check {
+@keyframes success-ring-draw {
   to {
     stroke-dashoffset: 0;
   }
 }
 
-@keyframes success-circle {
+@keyframes success-check-draw {
   to {
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes success-ring {
-  from {
-    transform: scale(0.6);
-    opacity: 0.6;
-  }
-  to {
-    transform: scale(1);
-    opacity: 0;
   }
 }
 
@@ -345,13 +265,9 @@
     transition: none;
   }
 
-  .success-toast,
-  .success-toast-icon::after,
-  .success-toast-check-path,
-  .success-overlay,
-  .success-overlay-card,
-  .success-hero-circle,
-  .success-hero-check {
+  .success-toast-card,
+  .success-ring-circle,
+  .success-ring-check {
     animation: none;
     transition: none;
   }
