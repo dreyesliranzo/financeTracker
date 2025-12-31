@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { RealtimeProvider } from "@/components/providers/RealtimeProvider";
 import { BootstrapProvider } from "@/components/providers/BootstrapProvider";
+import { SuccessOverlay } from "@/components/ui/SuccessOverlay";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: ReactNode }) {
           </BootstrapProvider>
         </AuthProvider>
         <Toaster richColors />
+        <SuccessOverlay />
       </QueryClientProvider>
     </ThemeProvider>
   );
