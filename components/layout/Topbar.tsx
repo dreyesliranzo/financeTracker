@@ -15,13 +15,12 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { SyncStatus } from "@/components/layout/SyncStatus";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { signOut } from "@/lib/supabase/auth";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { TransactionForm } from "@/components/forms/TransactionForm";
 import { cn } from "@/lib/utils";
+import { QuickAddDialog } from "@/components/quick/QuickAddDialog";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -51,7 +50,7 @@ export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const basePath = `/${pathname.split("/")[1] || "dashboard"}`;
   const title = titleMap[basePath] ?? "Dashboard";
@@ -112,17 +111,11 @@ export function Topbar() {
         >
           <Search className="h-4 w-4" />
         </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Quick add
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <TransactionForm onSuccess={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <Button size="sm" className="gap-2" onClick={() => setQuickAddOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Quick add
+        </Button>
+        <QuickAddDialog open={quickAddOpen} onOpenChange={setQuickAddOpen} />
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

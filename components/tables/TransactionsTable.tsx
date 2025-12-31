@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal, PencilLine, Trash2, Eye, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
@@ -15,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +43,10 @@ export function TransactionsTable() {
   const [sortKey, setSortKey] = useState("date");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTransaction, setDetailTransaction] = useState<Transaction | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineValues, setInlineValues] = useState({ merchant: "", amount: "" });
   const [page, setPage] = useState(1);
@@ -140,6 +148,23 @@ export function TransactionsTable() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        categoryId?: string;
+        search?: string;
+      };
+      if (detail?.categoryId) {
+        setCategoryFilter(detail.categoryId);
+      }
+      if (typeof detail?.search === "string") {
+        setSearch(detail.search);
+      }
+    };
+    window.addEventListener("app:transactions:filter", handler);
+    return () => window.removeEventListener("app:transactions:filter", handler);
+  }, []);
 
   const toggleSelectAll = (checked: boolean) => {
     setSelectedIds(checked ? paged.map((item) => item.id!).filter(Boolean) : []);
@@ -254,69 +279,112 @@ export function TransactionsTable() {
             placeholder="Search merchant or notes"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="min-w-[220px]"
+            className="min-w-[240px]"
           />
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="income">Income</SelectItem>
-              <SelectItem value="expense">Expense</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id!} value={category.id!}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Account" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All accounts</SelectItem>
-              {accounts.map((account) => (
-                <SelectItem key={account.id!} value={account.id!}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Currency" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All currencies</SelectItem>
-              {currencyOptions.map((currency) => (
-                <SelectItem key={currency.value} value={currency.value}>
-                  {currency.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            className="w-[150px]"
-          />
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            className="w-[150px]"
-          />
+          <Dialog open={filtersDialogOpen} onOpenChange={setFiltersDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Type</p>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      <SelectItem value="income">Income</SelectItem>
+                      <SelectItem value="expense">Expense</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Category</p>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id!} value={category.id!}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Account</p>
+                  <Select value={accountFilter} onValueChange={setAccountFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All accounts</SelectItem>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id!} value={account.id!}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Currency</p>
+                  <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All currencies</SelectItem>
+                      {currencyOptions.map((currency) => (
+                        <SelectItem key={currency.value} value={currency.value}>
+                          {currency.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(event) => setStartDate(event.target.value)}
+                  />
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(event) => setEndDate(event.target.value)}
+                  />
+                </div>
+                <div className="flex justify-between">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setTypeFilter("all");
+                      setCategoryFilter("all");
+                      setAccountFilter("all");
+                      setCurrencyFilter("all");
+                      setStartDate("");
+                      setEndDate("");
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button size="sm" onClick={() => setFiltersDialogOpen(false)}>
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 ? (
@@ -362,6 +430,95 @@ export function TransactionsTable() {
           </Dialog>
         </div>
       </div>
+
+      {hasFilters || deferredSearch ? (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {deferredSearch ? (
+            <Badge variant="secondary" className="gap-1">
+              Search: {deferredSearch}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setSearch("")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {typeFilter !== "all" ? (
+            <Badge variant="secondary" className="gap-1">
+              Type: {typeFilter}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setTypeFilter("all")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {categoryFilter !== "all" ? (
+            <Badge variant="secondary" className="gap-1">
+              Category: {categoryMap.get(categoryFilter) ?? "Category"}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setCategoryFilter("all")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {accountFilter !== "all" ? (
+            <Badge variant="secondary" className="gap-1">
+              Account: {accountMap.get(accountFilter) ?? "Account"}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setAccountFilter("all")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {currencyFilter !== "all" ? (
+            <Badge variant="secondary" className="gap-1">
+              Currency: {currencyFilter}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setCurrencyFilter("all")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {startDate ? (
+            <Badge variant="secondary" className="gap-1">
+              From {startDate}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setStartDate("")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {endDate ? (
+            <Badge variant="secondary" className="gap-1">
+              To {endDate}
+              <button
+                className="ml-1 rounded-full px-1 text-[10px]"
+                type="button"
+                onClick={() => setEndDate("")}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-border/60 bg-card/70">
         <Table className="min-w-[980px]">
@@ -427,8 +584,15 @@ export function TransactionsTable() {
                     ? accountMap.get(transaction.account_id)
                     : undefined;
                   return (
-                    <TableRow key={transaction.id}>
-                      <TableCell>
+                    <TableRow
+                      key={transaction.id}
+                      className="cursor-pointer hover:bg-muted/30"
+                      onClick={() => {
+                        setDetailTransaction(transaction);
+                        setDetailOpen(true);
+                      }}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.includes(transaction.id!)}
                           onCheckedChange={(value) =>
@@ -476,57 +640,45 @@ export function TransactionsTable() {
                         )}
                       </TableCell>
                       <TableCell>{transaction.currency_code ?? "USD"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {inlineEditId === transaction.id ? (
-                            <>
-                              <Button variant="ghost" size="sm" onClick={saveInlineEdit}>
-                                Save
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {inlineEditId === transaction.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={saveInlineEdit}>
+                              Save
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={cancelInlineEdit}>
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={cancelInlineEdit}>
-                                Cancel
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
                                 onClick={() => startInlineEdit(transaction)}
+                                className="gap-2"
                               >
-                                Quick edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
+                                <PencilLine className="h-4 w-4" /> Quick edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => setEditing(transaction)}
+                                className="gap-2"
                               >
-                                Edit
-                              </Button>
-                            </>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                Delete
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(transaction.id!)}>
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
+                                <Eye className="h-4 w-4" /> Edit in modal
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(transaction.id!)}
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -578,6 +730,74 @@ export function TransactionsTable() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent side="right" className="w-full max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Transaction details</SheetTitle>
+          </SheetHeader>
+          {detailTransaction ? (
+            <div className="mt-4 space-y-6">
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                <div>
+                  <p className="text-xs uppercase">Date</p>
+                  <p className="text-foreground">{detailTransaction.date}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase">Merchant</p>
+                  <p className="text-foreground">{detailTransaction.merchant ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase">Category</p>
+                  <p className="text-foreground">
+                    {detailTransaction.category_id
+                      ? categoryMap.get(detailTransaction.category_id) ?? "-"
+                      : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase">Account</p>
+                  <p className="text-foreground">
+                    {detailTransaction.account_id
+                      ? accountMap.get(detailTransaction.account_id) ?? "-"
+                      : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase">Amount</p>
+                  <p className="text-foreground font-semibold">
+                    {formatSignedCurrency(
+                      detailTransaction.amount_cents,
+                      detailTransaction.type,
+                      detailTransaction.currency_code ?? "USD"
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase">Currency</p>
+                  <p className="text-foreground">{detailTransaction.currency_code ?? "USD"}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs uppercase">Notes</p>
+                  <p className="text-foreground">
+                    {detailTransaction.notes?.length ? detailTransaction.notes : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+                <p className="mb-2 text-sm font-semibold text-foreground">Edit</p>
+                <TransactionForm
+                  transaction={detailTransaction}
+                  onSuccess={() => {
+                    setDetailOpen(false);
+                    setDetailTransaction(null);
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

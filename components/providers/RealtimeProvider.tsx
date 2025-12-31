@@ -7,7 +7,8 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  useCallback
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -17,9 +18,15 @@ type SyncStatus = "connected" | "reconnecting" | "offline";
 
 type SyncContextValue = {
   status: SyncStatus;
+  lastSync: number | null;
+  retry: () => void;
 };
 
-const SyncContext = createContext<SyncContextValue>({ status: "offline" });
+const SyncContext = createContext<SyncContextValue>({
+  status: "offline",
+  lastSync: null,
+  retry: () => {}
+});
 
 const TABLES = [
   "transactions",
@@ -39,6 +46,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       ? "reconnecting"
       : "offline"
   );
+  const [lastSync, setLastSync] = useState<number | null>(null);
+  const [version, setVersion] = useState(0);
   const invalidateTimers = useRef(new Map<string, number>());
 
   useEffect(() => {
@@ -48,7 +57,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     }
 
     const supabase = supabaseBrowser();
-    const channel = supabase.channel(`realtime:${user.id}`);
+    const channel = supabase.channel(`realtime:${user.id}:${version}`);
 
     TABLES.forEach((table) => {
       channel.on(
@@ -66,6 +75,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
               predicate: (query) =>
                 Array.isArray(query.queryKey) && query.queryKey[0] === table
             });
+            setLastSync(Date.now());
             invalidateTimers.current.delete(table);
           }, 300);
           invalidateTimers.current.set(table, timer);
@@ -76,6 +86,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     channel.subscribe((state) => {
       if (state === "SUBSCRIBED") {
         setStatus("connected");
+        setLastSync(Date.now());
       }
       if (state === "CHANNEL_ERROR" || state === "TIMED_OUT") {
         setStatus("reconnecting");
@@ -98,9 +109,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       invalidateTimers.current.forEach((timer) => window.clearTimeout(timer));
       invalidateTimers.current.clear();
     };
-  }, [queryClient, user]);
+  }, [queryClient, user, version]);
 
-  const value = useMemo(() => ({ status }), [status]);
+  const retry = useCallback(() => {
+    setStatus("reconnecting");
+    setVersion((prev) => prev + 1);
+  }, []);
+
+  const value = useMemo(() => ({ status, lastSync, retry }), [status, lastSync, retry]);
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }

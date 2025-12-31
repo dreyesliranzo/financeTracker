@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TransactionForm } from "@/components/forms/TransactionForm";
-import { DialogTrigger } from "@/components/ui/dialog";
+import { QuickAddDialog } from "@/components/quick/QuickAddDialog";
+import { fetchCategories, fetchTransactionsSummary } from "@/lib/supabase/queries";
 
 type CommandItem = {
   label: string;
   description?: string;
   action: () => void;
+  badge?: string;
 };
 
 const navItems = [
@@ -29,6 +31,30 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<"transaction" | "budget" | "goal" | "recurring">("transaction");
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories
+  });
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions", "summary", "palette"],
+    queryFn: () => fetchTransactionsSummary(undefined, undefined),
+    staleTime: 60_000
+  });
+
+  const merchants = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (transactions ?? [])
+            .map((txn) => txn.merchant?.trim())
+            .filter(Boolean)
+        )
+      ).slice(0, 30),
+    [transactions]
+  );
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -47,6 +73,34 @@ export function CommandPalette() {
         label: "Add transaction",
         description: "Quick add a new transaction",
         action: () => {
+          setQuickAddTab("transaction");
+          setQuickAddOpen(true);
+          setOpen(false);
+        }
+      },
+      {
+        label: "Add budget",
+        description: "Create a category budget",
+        action: () => {
+          setQuickAddTab("budget");
+          setQuickAddOpen(true);
+          setOpen(false);
+        }
+      },
+      {
+        label: "Add goal",
+        description: "Create a savings goal",
+        action: () => {
+          setQuickAddTab("goal");
+          setQuickAddOpen(true);
+          setOpen(false);
+        }
+      },
+      {
+        label: "Add recurring",
+        description: "Create a recurring item",
+        action: () => {
+          setQuickAddTab("recurring");
           setQuickAddOpen(true);
           setOpen(false);
         }
@@ -71,8 +125,42 @@ export function CommandPalette() {
         }
       });
     });
+    categories.forEach((category) =>
+      actions.push({
+        label: `Category: ${category.name}`,
+        description: category.type,
+        badge: "Category",
+        action: () => {
+          router.push("/transactions");
+          setOpen(false);
+          window.dispatchEvent(
+            new CustomEvent("app:transactions:filter", {
+              detail: { categoryId: category.id }
+            })
+          );
+        }
+      })
+    );
+
+    merchants.forEach((merchant) =>
+      actions.push({
+        label: `Merchant: ${merchant}`,
+        description: "Search merchant",
+        badge: "Merchant",
+        action: () => {
+          router.push("/transactions");
+          setOpen(false);
+          window.dispatchEvent(
+            new CustomEvent("app:transactions:filter", {
+              detail: { search: merchant }
+            })
+          );
+        }
+      })
+    );
+
     return actions;
-  }, [router]);
+  }, [categories, merchants, router]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -103,10 +191,19 @@ export function CommandPalette() {
                   onClick={item.action}
                   className="flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted/40"
                 >
-                  <span>{item.label}</span>
-                  {item.description ? (
-                    <span className="text-xs text-muted-foreground">{item.description}</span>
-                  ) : null}
+                  <div className="flex flex-col text-left">
+                    <span className="flex items-center gap-2">
+                      {item.badge ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {item.badge}
+                        </span>
+                      ) : null}
+                      <span>{item.label}</span>
+                    </span>
+                    {item.description ? (
+                      <span className="text-xs text-muted-foreground">{item.description}</span>
+                    ) : null}
+                  </div>
                 </button>
               ))}
               {filtered.length === 0 ? (
@@ -119,14 +216,11 @@ export function CommandPalette() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
-        <DialogTrigger asChild>
-          <span />
-        </DialogTrigger>
-        <DialogContent className="max-w-2xl">
-          <TransactionForm onSuccess={() => setQuickAddOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      <QuickAddDialog
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        initialTab={quickAddTab}
+      />
     </>
   );
 }

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatSignedCurrency } from "@/lib/money";
 import { fetchAccounts, fetchCategories, fetchRecurringTransactions } from "@/lib/supabase/queries";
-import { createTransaction, deleteRecurringTransaction, updateRecurringTransaction } from "@/lib/supabase/mutations";
+import { createTransaction, createRecurringTransaction, deleteRecurringTransaction, updateRecurringTransaction } from "@/lib/supabase/mutations";
 import type { RecurringTransaction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { formatDate, getNextRunDate } from "@/lib/supabase/recurring";
+import { successToast } from "@/lib/feedback";
 
 export function RecurringTransactionsTable() {
   const { user } = useAuth();
@@ -77,7 +78,7 @@ export function RecurringTransactionsTable() {
     try {
       await updateRecurringTransaction(item.id!, { active: !item.active });
       queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
-      toast.success(item.active ? "Recurring paused" : "Recurring resumed");
+      successToast(item.active ? "Recurring paused" : "Recurring resumed");
     } catch (error) {
       console.error(error);
       toast.error("Unable to update recurring transaction");
@@ -110,7 +111,7 @@ export function RecurringTransactionsTable() {
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["recurring_transactions"], exact: false });
-      toast.success("Recurring transaction created");
+      successToast("Recurring transaction created");
     } catch (error) {
       console.error(error);
       toast.error("Unable to run recurring transaction");
@@ -122,7 +123,7 @@ export function RecurringTransactionsTable() {
       const nextRun = getNextRunDate(item.next_run, item.cadence);
       await updateRecurringTransaction(item.id!, { next_run: nextRun });
       queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
-      toast.success("Next occurrence skipped");
+      successToast("Next occurrence skipped");
     } catch (error) {
       console.error(error);
       toast.error("Unable to skip occurrence");
@@ -133,10 +134,54 @@ export function RecurringTransactionsTable() {
     try {
       await deleteRecurringTransaction(id);
       queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
-      toast.success("Recurring transaction deleted");
+      successToast("Recurring transaction deleted");
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete recurring transaction");
+    }
+  };
+
+  const templates: Array<{ name: string; cadence: RecurringTransaction["cadence"]; type: "income" | "expense"; amount_cents: number; merchant?: string }> = [
+    { name: "Rent", cadence: "monthly", type: "expense", amount_cents: 150000, merchant: "Landlord" },
+    { name: "Payroll", cadence: "biweekly", type: "income", amount_cents: 250000, merchant: "Employer" },
+    { name: "Subscriptions", cadence: "monthly", type: "expense", amount_cents: 3000, merchant: "Subscriptions" }
+  ];
+
+  const handleTemplateCreate = async (templateName: string) => {
+    if (!user) return;
+    const template = templates.find((item) => item.name === templateName);
+    if (!template) return;
+    const accountId = accounts[0]?.id;
+    const categoryId = categories.find((cat) =>
+      template.type === "income" ? cat.type === "income" : cat.type === "expense"
+    )?.id;
+    if (!accountId || !categoryId) {
+      toast.error("Add at least one account and category first.");
+      return;
+    }
+    try {
+      await createRecurringTransaction(user.id, {
+        name: template.name,
+        amount_cents: template.amount_cents,
+        type: template.type,
+        category_id: categoryId,
+        account_id: accountId,
+        currency_code: "USD",
+        merchant: template.merchant ?? template.name,
+        notes: null,
+        tags: [],
+        cadence: template.cadence,
+        start_date: formatDate(new Date()),
+        next_run: formatDate(new Date()),
+        end_date: null,
+        last_run: null,
+        active: true
+      });
+      queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
+      successToast(`${template.name} created`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to create from template");
     }
   };
 
@@ -154,6 +199,15 @@ export function RecurringTransactionsTable() {
               <RecurringForm />
             </DialogContent>
           </Dialog>
+        }
+        secondaryAction={
+          <div className="flex flex-wrap gap-2">
+            {templates.map((template) => (
+              <Button key={template.name} variant="outline" onClick={() => handleTemplateCreate(template.name)}>
+                Use {template.name}
+              </Button>
+            ))}
+          </div>
         }
       />
     );

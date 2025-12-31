@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/empty/EmptyState";
 import { currencyOptions } from "@/lib/money/currencies";
 import { formatCurrency, parseCurrencyToCents } from "@/lib/money";
 import { fetchGoals, fetchProfile } from "@/lib/supabase/queries";
-import { deleteGoal, updateGoal } from "@/lib/supabase/mutations";
+import { createGoal, deleteGoal, updateGoal } from "@/lib/supabase/mutations";
 import { successToast } from "@/lib/feedback";
 
 export default function GoalsPage() {
@@ -44,6 +44,30 @@ export default function GoalsPage() {
   const sortedGoals = useMemo(() => {
     return [...goals].sort((a, b) => b.target_cents - a.target_cents);
   }, [goals]);
+
+  const templates = [
+    { name: "Emergency Fund", target_cents: 300000, description: "3-6 months of expenses" },
+    { name: "Debt Payoff", target_cents: 500000, description: "Snowball or avalanche" },
+    { name: "Vacation", target_cents: 150000, description: "Plan your next trip" }
+  ];
+
+  const handleTemplateCreate = async (name: string, amount: number) => {
+    if (!profile) return;
+    try {
+      await createGoal(profile.user_id, {
+        name,
+        target_cents: amount,
+        current_cents: 0,
+        currency_code: profile.default_currency ?? "USD",
+        due_date: null
+      });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      successToast(`${name} created`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to create goal template");
+    }
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -130,6 +154,19 @@ export default function GoalsPage() {
                 <GoalForm />
               </DialogContent>
             </Dialog>
+          }
+          secondaryAction={
+            <div className="flex flex-wrap gap-2">
+              {templates.map((template) => (
+                <Button
+                  key={template.name}
+                  variant="outline"
+                  onClick={() => handleTemplateCreate(template.name, template.target_cents)}
+                >
+                  {template.name}
+                </Button>
+              ))}
+            </div>
           }
         />
       ) : (
