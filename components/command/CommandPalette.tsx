@@ -20,6 +20,7 @@ const navItems = [
   { label: "Transactions", href: "/transactions" },
   { label: "Budgets", href: "/budgets" },
   { label: "Goals", href: "/goals" },
+  { label: "Subscriptions", href: "/subscriptions" },
   { label: "Insights", href: "/insights" },
   { label: "Projections", href: "/projections" },
   { label: "Advisor", href: "/advisor" },

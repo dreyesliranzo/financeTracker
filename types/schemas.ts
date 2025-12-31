@@ -137,6 +137,17 @@ export const goalSchema = z.object({
   updated_at: z.string().optional()
 });
 
+export const subscriptionCandidateSchema = z.object({
+  id: z.string().uuid().optional(),
+  user_id: z.string().uuid().optional(),
+  merchant: z.string().min(1),
+  avg_amount_cents: z.number().int(),
+  interval_guess: z.enum(["weekly", "monthly", "unknown"]),
+  next_due_date: z.string().optional().nullable(),
+  confidence: z.number(),
+  created_at: z.string().optional()
+});
+
 export const transactionFormSchema = z
   .object({
     date: z.string().min(1, "Date is required"),
@@ -242,6 +253,7 @@ export type OverallBudget = z.infer<typeof overallBudgetSchema>;
 export type Profile = z.infer<typeof profileSchema>;
 export type RecurringTransaction = z.infer<typeof recurringTransactionSchema>;
 export type Goal = z.infer<typeof goalSchema>;
+export type SubscriptionCandidate = z.infer<typeof subscriptionCandidateSchema>;
 export type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 export type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 export type OverallBudgetFormValues = z.infer<typeof overallBudgetFormSchema>;

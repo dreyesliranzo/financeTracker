@@ -334,3 +334,48 @@ export async function upsertProfile(
   if (error) throw error;
   return data as Profile;
 }
+
+type RecurringRuleInput = {
+  name: string;
+  schedule_type: "cron" | "rrule";
+  schedule_text: string;
+  timezone?: string;
+  next_run_at?: string | null;
+  template: Record<string, unknown>;
+};
+
+export async function createRecurringRule(userId: string, values: RecurringRuleInput) {
+  const { data, error } = await supabaseBrowser()
+    .from("recurring_rules")
+    .insert({
+      ...values,
+      user_id: userId,
+      timezone: values.timezone ?? "UTC"
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteSubscriptionCandidate(id: string) {
+  const { error } = await supabaseBrowser()
+    .from("subscription_candidates")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function snoozeSubscriptionCandidate(id: string, nextDueDate: string | null) {
+  const { data, error } = await supabaseBrowser()
+    .from("subscription_candidates")
+    .update({ next_due_date: nextDueDate })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}

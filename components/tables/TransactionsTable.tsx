@@ -23,7 +23,7 @@ import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { successToast } from "@/lib/feedback";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const sortOptions = [
   { value: "date", label: "Date" },
@@ -51,6 +51,8 @@ export function TransactionsTable() {
   const [inlineValues, setInlineValues] = useState({ merchant: "", amount: "" });
   const [page, setPage] = useState(1);
   const deferredSearch = useDeferredValue(search);
+  const searchParams = useSearchParams();
+  const urlSearch = searchParams.get("search");
   const pageSize = 50;
   const hasFilters =
     deferredSearch.trim().length > 0 ||
@@ -138,6 +140,11 @@ export function TransactionsTable() {
   useEffect(() => {
     setPage(1);
   }, [deferredSearch, typeFilter, categoryFilter, accountFilter, currencyFilter, startDate, endDate, sortKey]);
+
+  useEffect(() => {
+    if (!urlSearch) return;
+    setSearch((current) => (current ? current : urlSearch));
+  }, [urlSearch]);
 
   useEffect(() => {
     if (profile?.default_currency && currencyFilter === "all") {

@@ -14,6 +14,7 @@ import {
   fetchGoals,
   fetchOverallBudgets,
   fetchProfile,
+  fetchSubscriptionCandidates,
   fetchTransactionsSummary,
   fetchRecurringTransactions
 } from "@/lib/supabase/queries";
@@ -30,6 +31,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { Stagger } from "@/components/layout/Stagger";
 import { sumIncomeExpense, categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
+import { estimateMonthlyCents } from "@/lib/utils/subscriptions";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -89,6 +91,12 @@ export default function DashboardPage() {
   });
   const recurring = recurringQuery.data ?? [];
 
+  const subscriptionsQuery = useQuery({
+    queryKey: ["subscription_candidates"],
+    queryFn: fetchSubscriptionCandidates
+  });
+  const subscriptions = subscriptionsQuery.data ?? [];
+
   const isLoading =
     transactionsQuery.isLoading ||
     budgetsQuery.isLoading ||
@@ -96,7 +104,8 @@ export default function DashboardPage() {
     accountsQuery.isLoading ||
     overallBudgetsQuery.isLoading ||
     goalsQuery.isLoading ||
-    recurringQuery.isLoading;
+    recurringQuery.isLoading ||
+    subscriptionsQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -234,6 +243,19 @@ export default function DashboardPage() {
 
     return items.slice(0, 4);
   }, [budgetProgress, goals, recurring]);
+
+  const subscriptionSummary = useMemo(() => {
+    const ranked = subscriptions
+      .map((candidate) => ({
+        ...candidate,
+        monthly_cents: estimateMonthlyCents(candidate)
+      }))
+      .sort((a, b) => b.monthly_cents - a.monthly_cents);
+    return {
+      total: ranked.reduce((sum, item) => sum + item.monthly_cents, 0),
+      top: ranked.slice(0, 5)
+    };
+  }, [subscriptions]);
 
   const onboardingItems = useMemo(() => {
     return [
@@ -444,7 +466,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-3">
           <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
             <CardHeader>
               <CardTitle>Budget progress</CardTitle>
@@ -480,6 +502,51 @@ export default function DashboardPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Create goals to track progress here.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader>
+              <CardTitle>Subscriptions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              ) : subscriptions.length > 0 ? (
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-2xl font-semibold">
+                      {formatCurrency(subscriptionSummary.total, selectedCurrency)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Estimated per month</p>
+                  </div>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {subscriptionSummary.top.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between">
+                        <span className="truncate text-foreground">{item.merchant}</span>
+                        <span className="text-xs">
+                          {formatCurrency(item.monthly_cents, selectedCurrency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push("/subscriptions")}
+                    className="px-0 text-sm"
+                  >
+                    View subscription hub
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No subscriptions detected yet.
                 </p>
               )}
             </CardContent>

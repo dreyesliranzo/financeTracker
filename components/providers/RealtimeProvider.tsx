@@ -35,7 +35,8 @@ const TABLES = [
   "budgets",
   "overall_budgets",
   "recurring_transactions",
-  "goals"
+  "goals",
+  "subscription_candidates"
 ] as const;
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {

@@ -7,6 +7,7 @@ import type {
   OverallBudget,
   Profile,
   RecurringTransaction,
+  SubscriptionCandidate,
   Transaction
 } from "@/types";
 
@@ -234,4 +235,14 @@ export async function fetchProfile() {
 
   if (error && error.code !== "PGRST116") throw error;
   return (data ?? null) as Profile | null;
+}
+
+export async function fetchSubscriptionCandidates() {
+  const { data, error } = await supabaseBrowser()
+    .from("subscription_candidates")
+    .select("*")
+    .order("confidence", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as SubscriptionCandidate[];
 }

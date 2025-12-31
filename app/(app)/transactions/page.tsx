@@ -1,5 +1,6 @@
 import { TransactionsTable } from "@/components/tables/TransactionsTable";
 import { RecurringTransactionsTable } from "@/components/tables/RecurringTransactionsTable";
+import { Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Stagger } from "@/components/layout/Stagger";
 
@@ -18,7 +19,15 @@ export default function TransactionsPage() {
           <TabsTrigger value="recurring">Recurring</TabsTrigger>
         </TabsList>
         <TabsContent value="transactions">
-          <TransactionsTable />
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-border/60 bg-card/70 p-6 text-sm text-muted-foreground">
+                Loading transactions…
+              </div>
+            }
+          >
+            <TransactionsTable />
+          </Suspense>
         </TabsContent>
         <TabsContent value="recurring">
           <RecurringTransactionsTable />

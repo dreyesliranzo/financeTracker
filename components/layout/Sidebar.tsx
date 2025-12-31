@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Bell,
   CreditCard,
   LayoutDashboard,
   LineChart,
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: CreditCard },
   { href: "/recurring", label: "Recurring", icon: Repeat },
+  { href: "/subscriptions", label: "Subscriptions", icon: Bell },
   { href: "/budgets", label: "Budgets", icon: Wallet },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/insights", label: "Insights", icon: BarChart3 },
