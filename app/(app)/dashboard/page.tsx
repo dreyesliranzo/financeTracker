@@ -24,12 +24,13 @@ import { CashflowChart } from "@/components/charts/CashflowChart";
 import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
 import { GoalProgressList } from "@/components/charts/GoalProgressList";
 import { OnboardingChecklist } from "@/components/empty/OnboardingChecklist";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const didSelectCurrency = useRef(false);
@@ -251,8 +252,8 @@ export default function DashboardPage() {
         label: "Add your first account",
         done: accounts.length > 0,
         action: accounts.length === 0 ? (
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/settings">Go</Link>
+          <Button variant="secondary" size="sm" onClick={() => router.push("/settings")}>
+            Go
           </Button>
         ) : undefined
       },
@@ -260,8 +261,8 @@ export default function DashboardPage() {
         label: "Create categories",
         done: categories.length > 0,
         action: categories.length === 0 ? (
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/settings">Go</Link>
+          <Button variant="secondary" size="sm" onClick={() => router.push("/settings")}>
+            Go
           </Button>
         ) : undefined
       },
@@ -283,8 +284,8 @@ export default function DashboardPage() {
         label: "Set a budget",
         done: budgets.length > 0,
         action: budgets.length === 0 ? (
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/budgets">Go</Link>
+          <Button variant="secondary" size="sm" onClick={() => router.push("/budgets")}>
+            Go
           </Button>
         ) : undefined
       },
@@ -292,8 +293,8 @@ export default function DashboardPage() {
         label: "Create a goal",
         done: goals.length > 0,
         action: goals.length === 0 ? (
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/goals">Go</Link>
+          <Button variant="secondary" size="sm" onClick={() => router.push("/goals")}>
+            Go
           </Button>
         ) : undefined
       }

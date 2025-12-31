@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { fetchAccounts, fetchCategories, fetchTransactionsPage } from "@/lib/supabase/queries";
@@ -69,7 +70,7 @@ export function GlobalSearch() {
   const transactions = transactionsResult?.data ?? [];
 
   const handleNavigate = (href: string) => {
-    router.push(href);
+    router.push(href as Route);
     setOpen(false);
   };
 

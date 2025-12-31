@@ -19,7 +19,7 @@ import { TransactionForm } from "@/components/forms/TransactionForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showSuccessToast } from "@/lib/toast";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const sortOptions = [
   { value: "date", label: "Date" },
@@ -27,6 +27,7 @@ const sortOptions = [
 ] as const;
 
 export function TransactionsTable() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -235,8 +236,8 @@ export function TransactionsTable() {
         }
         secondaryAction={
           !hasFilters ? (
-            <Button variant="secondary" asChild>
-              <Link href="/settings">Import CSV</Link>
+            <Button variant="secondary" onClick={() => router.push("/settings")}>
+              Import CSV
             </Button>
           ) : undefined
         }

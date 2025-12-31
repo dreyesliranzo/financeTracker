@@ -84,19 +84,19 @@ export async function ensureDefaultData(userId: string) {
     .select("id")
     .limit(1);
 
-  const { data: accountRows } = await supabase
+  const { data: accountSeedRows } = await supabase
     .from("accounts")
     .select("id,name");
 
-  const { data: categoryRows } = await supabase
+  const { data: categorySeedRows } = await supabase
     .from("categories")
     .select("id,name,type");
 
   const accountMap = new Map(
-    (accountRows ?? []).map((account) => [account.name, account.id])
+    (accountSeedRows ?? []).map((account) => [account.name, account.id])
   );
   const categoryMap = new Map(
-    (categoryRows ?? []).map((category) => [category.name, category.id])
+    (categorySeedRows ?? []).map((category) => [category.name, category.id])
   );
 
   if (!transactionError && (transactionRows?.length ?? 0) === 0) {

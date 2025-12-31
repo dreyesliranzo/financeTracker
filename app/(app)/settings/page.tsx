@@ -100,7 +100,10 @@ export default function SettingsPage() {
       return { total: csvData.length, missingRequired: 0, duplicates: 0 };
     }
     const missingRequired = csvData.filter((row) =>
-      requiredCsvFields.some((field) => !row[mapping[field]])
+      requiredCsvFields.some((field) => {
+        const mapped = mapping[field];
+        return !mapped || !row[mapped];
+      })
     ).length;
 
     const existingKeys = new Set(
