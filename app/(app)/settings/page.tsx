@@ -32,6 +32,7 @@ import { currencyOptions } from "@/lib/money/currencies";
 import { createAccount, createCategory, createTransaction } from "@/lib/supabase/mutations";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useAccent } from "@/components/providers/AccentProvider";
+import { Stagger } from "@/components/layout/Stagger";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -492,7 +493,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <Stagger step={60} className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -856,6 +857,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </Stagger>
   );
 }

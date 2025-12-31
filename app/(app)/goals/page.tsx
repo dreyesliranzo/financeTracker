@@ -17,6 +17,7 @@ import { formatCurrency, parseCurrencyToCents } from "@/lib/money";
 import { fetchGoals, fetchProfile } from "@/lib/supabase/queries";
 import { createGoal, deleteGoal, updateGoal } from "@/lib/supabase/mutations";
 import { successToast } from "@/lib/feedback";
+import { Stagger } from "@/components/layout/Stagger";
 
 export default function GoalsPage() {
   const queryClient = useQueryClient();
@@ -170,7 +171,7 @@ export default function GoalsPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <Stagger step={60} className="grid gap-4 lg:grid-cols-2">
           {sortedGoals.map((goal) => {
             const ratio = goal.target_cents
               ? goal.current_cents / goal.target_cents
@@ -248,11 +249,11 @@ export default function GoalsPage() {
                     {ratio >= 1 ? "Goal reached" : `${Math.round(ratio * 100)}% saved`}
                   </p>
                 </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    )}
+              </Card>
+            );
+          })}
+        </Stagger>
+      )}
 
     <Dialog
       open={Boolean(progressGoal)}

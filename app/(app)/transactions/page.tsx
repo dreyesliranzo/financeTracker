@@ -1,10 +1,11 @@
 import { TransactionsTable } from "@/components/tables/TransactionsTable";
 import { RecurringTransactionsTable } from "@/components/tables/RecurringTransactionsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Stagger } from "@/components/layout/Stagger";
 
 export default function TransactionsPage() {
   return (
-    <div className="space-y-6">
+    <Stagger step={70} className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Transactions</h1>
         <p className="text-sm text-muted-foreground">
@@ -23,6 +24,6 @@ export default function TransactionsPage() {
           <RecurringTransactionsTable />
         </TabsContent>
       </Tabs>
-    </div>
+    </Stagger>
   );
 }

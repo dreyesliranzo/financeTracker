@@ -1,4 +1,5 @@
 import { Shell } from "@/components/layout/Shell";
+import { PageEnter } from "@/components/layout/PageEnter";
 
 import type { ReactNode } from "react";
 
@@ -7,5 +8,9 @@ export default function AppLayout({
 }: {
   children: ReactNode;
 }) {
-  return <Shell>{children}</Shell>;
+  return (
+    <PageEnter>
+      <Shell>{children}</Shell>
+    </PageEnter>
+  );
 }

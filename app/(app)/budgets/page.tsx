@@ -24,6 +24,7 @@ import { BudgetForm } from "@/components/forms/BudgetForm";
 import { OverallBudgetForm } from "@/components/forms/OverallBudgetForm";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
+import { Stagger } from "@/components/layout/Stagger";
 
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -210,7 +211,7 @@ export default function BudgetsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <Stagger step={60} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Budgets</h1>
@@ -456,6 +457,6 @@ export default function BudgetsPage() {
               );
             })}
       </div>
-    </div>
+    </Stagger>
   );
 }

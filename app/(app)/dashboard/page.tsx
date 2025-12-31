@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
+import { Stagger } from "@/components/layout/Stagger";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -344,157 +345,159 @@ export default function DashboardPage() {
         items={onboardingItems}
       />
 
-      {notifications.length > 0 ? (
-        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-          <p className="text-sm font-medium text-foreground">Notifications</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {notifications.map((item) => (
-              <div
-                key={`${item.title}-${item.detail}`}
-                className="rounded-xl border border-border/60 px-3 py-2 text-sm"
-              >
-                <p className="font-medium">{item.title}</p>
-                <p className="text-xs text-muted-foreground">{item.detail}</p>
-              </div>
-            ))}
+      <Stagger step={60} className="space-y-8">
+        {notifications.length > 0 ? (
+          <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+            <p className="text-sm font-medium text-foreground">Notifications</p>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {notifications.map((item) => (
+                <div
+                  key={`${item.title}-${item.detail}`}
+                  className="rounded-xl border border-border/60 px-3 py-2 text-sm"
+                >
+                  <p className="font-medium">{item.title}</p>
+                  <p className="text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              ))}
+            </div>
           </div>
+        ) : null}
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-28" />
+              ) : (
+                <div className="text-2xl font-semibold">
+                  {formatCurrency(net, selectedCurrency)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Income</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-28" />
+              ) : (
+                <div className="text-2xl font-semibold text-emerald-400">
+                  {formatCurrency(income, selectedCurrency)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Expenses</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-28" />
+              ) : (
+                <div className="text-2xl font-semibold text-rose-400">
+                  {formatCurrency(expense, selectedCurrency)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">
+                Remaining budget
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-28" />
+              ) : (
+                <div>
+                  <div className="text-2xl font-semibold">
+                    {formatCurrency(remainingBudget, selectedCurrency)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {overallBudget ? "General budget" : "Category budgets"}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-28" />
-          ) : (
-            <div className="text-2xl font-semibold">
-              {formatCurrency(net, selectedCurrency)}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Income</CardTitle>
-          </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-28" />
-          ) : (
-            <div className="text-2xl font-semibold text-emerald-400">
-              {formatCurrency(income, selectedCurrency)}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Expenses</CardTitle>
-          </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-28" />
-          ) : (
-            <div className="text-2xl font-semibold text-rose-400">
-              {formatCurrency(expense, selectedCurrency)}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Remaining budget
-            </CardTitle>
-          </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-8 w-28" />
-          ) : (
-            <div>
-              <div className="text-2xl font-semibold">
-                {formatCurrency(remainingBudget, selectedCurrency)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {overallBudget ? "General budget" : "Category budgets"}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader>
+              <CardTitle>Expenses by category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
+                <ExpenseByCategoryChart data={expenseByCategory} />
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader>
+              <CardTitle>Cashflow</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
+                <CashflowChart data={cashflowData} />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader>
+              <CardTitle>Budget progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : budgetProgress.length > 0 ? (
+                <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Set a budget to track your progress.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+            <CardHeader>
+              <CardTitle>Goals progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : goalProgress.length > 0 ? (
+                <GoalProgressList items={goalProgress} currencyCode={selectedCurrency} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Create goals to track progress here.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </Stagger>
     </div>
-
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-        <CardHeader>
-          <CardTitle>Expenses by category</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <ExpenseByCategoryChart data={expenseByCategory} />
-          )}
-        </CardContent>
-      </Card>
-      <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-        <CardHeader>
-          <CardTitle>Cashflow</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <CashflowChart data={cashflowData} />
-          )}
-        </CardContent>
-      </Card>
-    </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader>
-            <CardTitle>Budget progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : budgetProgress.length > 0 ? (
-              <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Set a budget to track your progress.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
-          <CardHeader>
-            <CardTitle>Goals progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : goalProgress.length > 0 ? (
-              <GoalProgressList items={goalProgress} currencyCode={selectedCurrency} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Create goals to track progress here.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-  </div>
   );
 }
