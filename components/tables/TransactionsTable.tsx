@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { formatCurrency, formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactionsPage } from "@/lib/supabase/queries";
-import { bulkDeleteTransactions, deleteTransaction, updateTransaction } from "@/lib/supabase/mutations";
+import { bulkDeleteTransactions, createTransaction, deleteTransaction, updateTransaction } from "@/lib/supabase/mutations";
 import type { Transaction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/empty/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingText } from "@/components/ui/LoadingText";
 import { successToast } from "@/lib/feedback";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const sortOptions = [
@@ -32,8 +33,25 @@ const sortOptions = [
   { value: "amount", label: "Amount" }
 ] as const;
 
+type SavedView = {
+  id: string;
+  name: string;
+  filters: {
+    search: string;
+    typeFilter: string;
+    categoryFilter: string;
+    accountFilter: string;
+    currencyFilter: string;
+    startDate: string;
+    endDate: string;
+    sortKey: string;
+  };
+  createdAt: string;
+};
+
 export function TransactionsTable() {
   const router = useRouter();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -47,10 +65,18 @@ export function TransactionsTable() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTransaction, setDetailTransaction] = useState<Transaction | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeRow, setActiveRow] = useState<Transaction | null>(null);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineValues, setInlineValues] = useState({ merchant: "", amount: "" });
+  const [addOpen, setAddOpen] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [viewName, setViewName] = useState("");
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkAccountOpen, setBulkAccountOpen] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("none");
+  const [bulkAccountId, setBulkAccountId] = useState("none");
   const [page, setPage] = useState(1);
   const deferredSearch = useDeferredValue(search);
   const searchParams = useSearchParams();
@@ -61,6 +87,8 @@ export function TransactionsTable() {
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
   const tableRef = useRef<HTMLTableElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const storageKey = user?.id ? `ledgerly:savedViews:${user.id}` : "ledgerly:savedViews:anon";
   const pageSize = 50;
   const hasFilters =
     deferredSearch.trim().length > 0 ||
@@ -156,6 +184,15 @@ export function TransactionsTable() {
   const paddingBottom =
     rowVirtualizer.getTotalSize() -
     (virtualRows.length > 0 ? virtualRows[virtualRows.length - 1].end : 0);
+  const selectedTransactions = useMemo(
+    () => rows.filter((transaction) => selectedIds.includes(transaction.id ?? "")),
+    [rows, selectedIds]
+  );
+  const primarySelection = useMemo(() => {
+    if (activeRow) return activeRow;
+    if (selectedIds.length === 1) return selectedTransactions[0] ?? null;
+    return null;
+  }, [activeRow, selectedIds.length, selectedTransactions]);
 
   useEffect(() => {
     setPage(1);
@@ -223,6 +260,136 @@ export function TransactionsTable() {
     return () => window.removeEventListener("app:transactions:filter", handler);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        setSavedViews([]);
+        return;
+      }
+      const parsed = JSON.parse(raw) as SavedView[];
+      if (Array.isArray(parsed)) {
+        setSavedViews(parsed);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(storageKey, JSON.stringify(savedViews));
+  }, [savedViews, storageKey]);
+
+  const applySavedView = (view: SavedView) => {
+    setSearch(view.filters.search);
+    setTypeFilter(view.filters.typeFilter);
+    setCategoryFilter(view.filters.categoryFilter);
+    setAccountFilter(view.filters.accountFilter);
+    setCurrencyFilter(view.filters.currencyFilter);
+    setStartDate(view.filters.startDate);
+    setEndDate(view.filters.endDate);
+    setSortKey(view.filters.sortKey);
+    setPage(1);
+  };
+
+  const handleSaveView = () => {
+    const trimmed = viewName.trim();
+    if (!trimmed) {
+      toast.error("Name your view first");
+      return;
+    }
+    const id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const nextView: SavedView = {
+      id,
+      name: trimmed,
+      filters: {
+        search,
+        typeFilter,
+        categoryFilter,
+        accountFilter,
+        currencyFilter,
+        startDate,
+        endDate,
+        sortKey
+      },
+      createdAt: new Date().toISOString()
+    };
+    setSavedViews((prev) => [
+      nextView,
+      ...prev.filter((view) => view.name.toLowerCase() !== trimmed.toLowerCase())
+    ]);
+    setSaveViewOpen(false);
+    setViewName("");
+    successToast("Saved view created");
+  };
+
+  const handleClearViews = () => {
+    setSavedViews([]);
+    successToast("Saved views cleared");
+  };
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (filtersDialogOpen || detailOpen || addOpen || saveViewOpen) {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+
+      if (event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setAddOpen(true);
+        return;
+      }
+
+      if (event.key.toLowerCase() === "e") {
+        if (primarySelection) {
+          event.preventDefault();
+          setEditing(primarySelection);
+        }
+        return;
+      }
+
+      if (event.key === "Delete") {
+        event.preventDefault();
+        if (selectedIds.length > 1) {
+          handleBulkDelete();
+          return;
+        }
+        if (primarySelection) {
+          handleDelete(primarySelection);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [addOpen, detailOpen, filtersDialogOpen, primarySelection, saveViewOpen, selectedIds.length]);
+
   const toggleSelectAll = (checked: boolean) => {
     setSelectedIds(checked ? paged.map((item) => item.id!).filter(Boolean) : []);
   };
@@ -266,15 +433,63 @@ export function TransactionsTable() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const restoreTransactions = async (items: Transaction[]) => {
+    if (!user) {
+      toast.error("Please sign in to restore.");
+      return;
+    }
+    if (!items.length) return;
     try {
-      await deleteTransaction(id);
+      await Promise.all(
+        items.map((transaction) => {
+          const kind = (transaction.transaction_kind ?? transaction.type) as "income" | "expense" | "transfer";
+          return createTransaction(user.id, {
+            date: transaction.date,
+            amount_cents: transaction.amount_cents,
+            type: kind,
+            category_id: transaction.category_id ?? null,
+            account_id: transaction.account_id ?? null,
+            from_account_id: transaction.from_account_id ?? null,
+            to_account_id: transaction.to_account_id ?? null,
+            currency_code: transaction.currency_code ?? "USD",
+            merchant: transaction.merchant ?? null,
+            notes: transaction.notes ?? null,
+            tags: transaction.tags ?? [],
+            transaction_splits:
+              transaction.transaction_splits?.map((split) => ({
+                category_id: split.category_id ?? null,
+                amount_cents: split.amount_cents,
+                note: split.note ?? null
+              })) ?? []
+          });
+        })
+      );
       queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
-      successToast("Transaction deleted");
+      successToast("Transactions restored");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to restore transactions");
+    }
+  };
+
+  const handleDelete = async (transaction: Transaction) => {
+    try {
+      await deleteTransaction(transaction.id!);
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      toast("Transaction deleted", {
+        action: {
+          label: "Undo",
+          onClick: () => restoreTransactions([transaction])
+        }
+      });
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete transaction");
@@ -282,6 +497,7 @@ export function TransactionsTable() {
   };
 
   const handleBulkDelete = async () => {
+    const toRestore = selectedTransactions;
     try {
       await bulkDeleteTransactions(selectedIds);
       setSelectedIds([]);
@@ -290,41 +506,106 @@ export function TransactionsTable() {
       queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
-      successToast("Transactions deleted");
+      toast("Transactions deleted", {
+        action: {
+          label: "Undo",
+          onClick: () => restoreTransactions(toRestore)
+        }
+      });
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete transactions");
     }
   };
 
+  const handleBulkRecategorize = async () => {
+    const targetCategory = bulkCategoryId === "none" ? null : bulkCategoryId;
+    const editable = selectedTransactions.filter((transaction) => {
+      const kind = transaction.transaction_kind ?? transaction.type;
+      return kind !== "transfer";
+    });
+    if (!editable.length) {
+      toast.error("No editable transactions selected.");
+      return;
+    }
+    try {
+      await Promise.all(
+        editable.map((transaction) =>
+          updateTransaction(transaction.id!, { category_id: targetCategory })
+        )
+      );
+      setSelectedIds([]);
+      setBulkCategoryOpen(false);
+      setBulkCategoryId("none");
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      successToast("Transactions updated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to update categories");
+    }
+  };
+
+  const handleBulkMoveAccount = async () => {
+    const targetAccount = bulkAccountId === "none" ? null : bulkAccountId;
+    const editable = selectedTransactions.filter((transaction) => {
+      const kind = transaction.transaction_kind ?? transaction.type;
+      return kind !== "transfer";
+    });
+    if (!editable.length) {
+      toast.error("No editable transactions selected.");
+      return;
+    }
+    try {
+      await Promise.all(
+        editable.map((transaction) =>
+          updateTransaction(transaction.id!, { account_id: targetAccount })
+        )
+      );
+      setSelectedIds([]);
+      setBulkAccountOpen(false);
+      setBulkAccountId("none");
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      successToast("Transactions updated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to update accounts");
+    }
+  };
+
   if (!isLoading && totalCount === 0) {
     return (
-      <EmptyState
-        title={hasFilters ? "No matching transactions" : "No transactions yet"}
-        description={
-          hasFilters
-            ? "Try adjusting your filters or search."
-            : "Add your first transaction to see insights here."
-        }
-        action={
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>Add transaction</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <TransactionForm />
-            </DialogContent>
-          </Dialog>
-        }
-        secondaryAction={
-          !hasFilters ? (
-            <Button variant="secondary" onClick={() => router.push("/settings")}>
-              Import CSV
-            </Button>
-          ) : undefined
-        }
-        note={!hasFilters ? "Tip: Import a CSV to jumpstart your dashboard." : undefined}
-      />
+      <>
+        <EmptyState
+          title={hasFilters ? "No matching transactions" : "No transactions yet"}
+          description={
+            hasFilters
+              ? "Try adjusting your filters or search."
+              : "Add your first transaction to see insights here."
+          }
+          action={
+            <Button onClick={() => setAddOpen(true)}>Add transaction</Button>
+          }
+          secondaryAction={
+            !hasFilters ? (
+              <Button variant="secondary" onClick={() => router.push("/settings")}>
+                Import CSV
+              </Button>
+            ) : undefined
+          }
+          note={!hasFilters ? "Tip: Import a CSV to jumpstart your dashboard." : undefined}
+        />
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DialogContent className="max-w-2xl">
+            <TransactionForm />
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
 
@@ -337,6 +618,7 @@ export function TransactionsTable() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="min-w-[240px]"
+            ref={searchRef}
           />
           <Dialog open={filtersDialogOpen} onOpenChange={setFiltersDialogOpen}>
             <DialogTrigger asChild>
@@ -443,28 +725,73 @@ export function TransactionsTable() {
               </div>
             </DialogContent>
           </Dialog>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                Saved views
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {savedViews.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  No saved views yet.
+                </div>
+              ) : (
+                savedViews.map((view) => (
+                  <DropdownMenuItem key={view.id} onClick={() => applySavedView(view)}>
+                    {view.name}
+                  </DropdownMenuItem>
+                ))
+              )}
+              {savedViews.length > 0 ? (
+                <DropdownMenuItem onClick={handleClearViews} className="text-destructive focus:text-destructive">
+                  Clear saved views
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={() => setSaveViewOpen(true)}>
+            Save view
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 ? (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">Delete selected</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete transactions?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently remove {selectedIds.length} transactions.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleBulkDelete}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Bulk actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setBulkCategoryOpen(true)}>
+                    Recategorize
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setBulkAccountOpen(true)}>
+                    Move account
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">Delete selected</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete transactions?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently remove {selectedIds.length} transactions.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleBulkDelete}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           ) : null}
           <Select value={sortKey} onValueChange={setSortKey}>
             <SelectTrigger className="w-[120px]">
@@ -478,9 +805,9 @@ export function TransactionsTable() {
               ))}
             </SelectContent>
           </Select>
-          <Dialog>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button>Add transaction</Button>
+              <Button onClick={() => setAddOpen(true)}>Add transaction</Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <TransactionForm />
@@ -670,6 +997,7 @@ export function TransactionsTable() {
                       key={transaction.id}
                       className="cursor-pointer hover:bg-muted/30"
                       onClick={() => {
+                        setActiveRow(transaction);
                         setDetailTransaction(transaction);
                         setDetailOpen(true);
                       }}
@@ -776,7 +1104,7 @@ export function TransactionsTable() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="gap-2 text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(transaction.id!)}
+                                onClick={() => handleDelete(transaction)}
                               >
                                 <Trash2 className="h-4 w-4" /> Delete
                               </DropdownMenuItem>
@@ -825,6 +1153,94 @@ export function TransactionsTable() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Save view</h3>
+              <p className="text-sm text-muted-foreground">
+                Store this filter set for quick access.
+              </p>
+            </div>
+            <Input
+              placeholder="View name"
+              value={viewName}
+              onChange={(event) => setViewName(event.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setSaveViewOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveView}>Save view</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Recategorize</h3>
+              <p className="text-sm text-muted-foreground">
+                Apply a new category to {selectedIds.length} transactions.
+              </p>
+            </div>
+            <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Uncategorized</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id!} value={category.id!}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setBulkCategoryOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleBulkRecategorize}>Apply</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkAccountOpen} onOpenChange={setBulkAccountOpen}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Move account</h3>
+              <p className="text-sm text-muted-foreground">
+                Apply a new account to {selectedIds.length} transactions.
+              </p>
+            </div>
+            <Select value={bulkAccountId} onValueChange={setBulkAccountId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No account</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id!} value={account.id!}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setBulkAccountOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleBulkMoveAccount}>Apply</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(editing)}
