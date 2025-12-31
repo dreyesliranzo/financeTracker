@@ -12,6 +12,7 @@ import { LoadingText } from "@/components/ui/LoadingText";
 import { fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
+import { sumIncomeExpense } from "@/lib/utils/transactions";
 const ChartFallback = () => (
   <div className="space-y-3">
     <LoadingText label="Loading chart" />
@@ -69,26 +70,15 @@ export default function ProjectionsPage() {
     queryFn: () =>
       fetchTransactionsSummary(
         { start: rangeStart, end: rangeEnd },
-        selectedCurrency
+        selectedCurrency,
+        { includeSplits: false }
       )
   });
   const transactions = transactionsQuery.data ?? [];
   const isLoading = transactionsQuery.isLoading;
 
   const totals = useMemo(() => {
-    return transactions.reduce(
-      (acc, transaction) => {
-        const kind = transaction.transaction_kind ?? transaction.type;
-        if (kind === "transfer") return acc;
-        if (kind === "income") {
-          acc.income += transaction.amount_cents;
-        } else {
-          acc.expense += transaction.amount_cents;
-        }
-        return acc;
-      },
-      { income: 0, expense: 0 }
-    );
+    return sumIncomeExpense(transactions);
   }, [transactions]);
 
   const baseStats = useMemo(() => {

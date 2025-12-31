@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { format, subDays } from "date-fns";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { QuickAddDialog } from "@/components/quick/QuickAddDialog";
@@ -33,6 +34,8 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"transaction" | "budget" | "goal" | "recurring">("transaction");
+  const rangeStart = format(subDays(new Date(), 90), "yyyy-MM-dd");
+  const rangeEnd = format(new Date(), "yyyy-MM-dd");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -41,8 +44,14 @@ export function CommandPalette() {
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions", "summary", "palette"],
-    queryFn: () => fetchTransactionsSummary(undefined, undefined),
-    staleTime: 60_000
+    queryFn: () =>
+      fetchTransactionsSummary(
+        { start: rangeStart, end: rangeEnd },
+        undefined,
+        { includeSplits: false, limit: 300 }
+      ),
+    enabled: open,
+    staleTime: 5 * 60_000
   });
 
   const merchants = useMemo(

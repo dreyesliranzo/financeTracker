@@ -36,7 +36,7 @@ type TransactionSummary = Transaction & {
 export async function fetchAccounts() {
   const { data, error } = await supabaseBrowser()
     .from("accounts")
-    .select("*")
+    .select("id,name,type,account_class,currency_code,created_at")
     .order("created_at", { ascending: true });
 
   if (error) throw error;
@@ -46,7 +46,7 @@ export async function fetchAccounts() {
 export async function fetchCategories() {
   const { data, error } = await supabaseBrowser()
     .from("categories")
-    .select("*")
+    .select("id,name,type,icon,created_at")
     .order("created_at", { ascending: true });
 
   if (error) throw error;
@@ -71,17 +71,23 @@ export async function fetchTransactions(range?: DateRange, currencyCode?: string
     query = query.eq("currency_code", currencyCode);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.returns<TransactionSummary[]>();
   if (error) throw error;
   return (data ?? []) as Transaction[];
 }
 
 export async function fetchTransactionsSummary(
   range?: DateRange,
-  currencyCode?: string
+  currencyCode?: string,
+  options?: {
+    includeSplits?: boolean;
+    limit?: number;
+  }
 ) {
-  const fields =
-    "id,date,amount_cents,type,transaction_kind,category_id,account_id,from_account_id,to_account_id,currency_code,merchant,transaction_splits(id,category_id,amount_cents,note)" as const;
+  const includeSplits = options?.includeSplits ?? true;
+  const fields = includeSplits
+    ? ("id,date,amount_cents,type,transaction_kind,category_id,account_id,from_account_id,to_account_id,currency_code,merchant,transaction_splits(id,category_id,amount_cents,note)" as const)
+    : ("id,date,amount_cents,type,transaction_kind,category_id,account_id,from_account_id,to_account_id,currency_code,merchant" as const);
 
   let query = supabaseBrowser()
     .from("transactions")
@@ -100,7 +106,11 @@ export async function fetchTransactionsSummary(
     query = query.eq("currency_code", currencyCode);
   }
 
-  const { data, error } = await query;
+  if (options?.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data, error } = await query.returns<TransactionSummary[]>();
   if (error) throw error;
   return (data ?? []) as TransactionSummary[];
 }
@@ -167,7 +177,7 @@ export async function fetchTransactionsPage(
 export async function fetchBudgets(month?: string, currencyCode?: string) {
   let query = supabaseBrowser()
     .from("budgets")
-    .select("*")
+    .select("id,month,category_id,limit_cents,currency_code,created_at")
     .order("created_at", { ascending: true });
 
   if (month) {
@@ -186,7 +196,7 @@ export async function fetchBudgets(month?: string, currencyCode?: string) {
 export async function fetchOverallBudgets(month?: string, currencyCode?: string) {
   let query = supabaseBrowser()
     .from("overall_budgets")
-    .select("*")
+    .select("id,month,limit_cents,currency_code,created_at")
     .order("created_at", { ascending: true });
 
   if (month) {
@@ -205,7 +215,9 @@ export async function fetchOverallBudgets(month?: string, currencyCode?: string)
 export async function fetchRecurringTransactions() {
   const { data, error } = await supabaseBrowser()
     .from("recurring_transactions")
-    .select("*")
+    .select(
+      "id,name,amount_cents,type,category_id,account_id,currency_code,merchant,notes,tags,cadence,start_date,next_run,last_run,end_date,active,created_at,updated_at"
+    )
     .order("next_run", { ascending: true });
 
   if (error) throw error;
@@ -215,7 +227,7 @@ export async function fetchRecurringTransactions() {
 export async function fetchGoals(currencyCode?: string) {
   let query = supabaseBrowser()
     .from("goals")
-    .select("*")
+    .select("id,name,target_cents,current_cents,currency_code,due_date,created_at,updated_at")
     .order("created_at", { ascending: true });
 
   if (currencyCode) {
@@ -240,7 +252,7 @@ export async function fetchProfile() {
 export async function fetchSubscriptionCandidates() {
   const { data, error } = await supabaseBrowser()
     .from("subscription_candidates")
-    .select("*")
+    .select("id,merchant,avg_amount_cents,interval_guess,next_due_date,confidence,created_at")
     .order("confidence", { ascending: false });
 
   if (error) throw error;
