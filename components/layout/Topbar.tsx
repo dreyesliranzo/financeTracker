@@ -62,7 +62,7 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-4 backdrop-blur lg:px-10">
+    <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border/60 bg-background/95 px-4 py-4 lg:px-10">
       <div className="flex items-center gap-3">
         <Sheet>
           <SheetTrigger asChild>

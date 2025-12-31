@@ -24,8 +24,8 @@ export function SuccessOverlay() {
 
       setPayload(detail);
       window.requestAnimationFrame(() => setVisible(true));
-      hideTimer.current = window.setTimeout(() => setVisible(false), 1800);
-      clearTimer.current = window.setTimeout(() => setPayload(null), 2300);
+      hideTimer.current = window.setTimeout(() => setVisible(false), 1600);
+      clearTimer.current = window.setTimeout(() => setPayload(null), 2100);
     };
 
     window.addEventListener(EVENT_NAME, handle as EventListener);
@@ -47,11 +47,8 @@ export function SuccessOverlay() {
         <div className="success-hero">
           <div className="success-hero-ring" aria-hidden="true">
             <svg className="success-hero-svg" viewBox="0 0 120 120">
-              <circle className="success-hero-circle" cx="60" cy="60" r="48" />
-              <path
-                className="success-hero-check"
-                d="M36 62l16 16 32-34"
-              />
+              <circle className="success-hero-circle" cx="60" cy="60" r="46" />
+              <path className="success-hero-check" d="M36 62l16 16 32-34" />
             </svg>
           </div>
           <div className="success-hero-text">
