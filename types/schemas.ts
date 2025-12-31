@@ -10,6 +10,7 @@ export const accountTypeSchema = z.enum([
 ]);
 
 export const categoryTypeSchema = z.enum(["income", "expense"]);
+export const transactionKindSchema = z.enum(["income", "expense", "transfer"]);
 export const currencySchema = z.enum([
   "USD",
   "EUR",
@@ -52,13 +53,27 @@ export const transactionSchema = z.object({
   user_id: z.string().uuid().optional(),
   date: z.string().min(1, "Date is required"),
   amount_cents: z.number().int(),
-  type: categoryTypeSchema,
+  type: transactionKindSchema,
+  transaction_kind: transactionKindSchema.optional(),
   category_id: z.string().uuid().nullable(),
   account_id: z.string().uuid().nullable(),
+  from_account_id: z.string().uuid().nullable().optional(),
+  to_account_id: z.string().uuid().nullable().optional(),
   currency_code: currencySchema.default("USD"),
   merchant: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   tags: z.array(z.string()).optional().nullable(),
+  transaction_splits: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        category_id: z.string().uuid().nullable(),
+        amount_cents: z.number().int(),
+        note: z.string().optional().nullable()
+      })
+    )
+    .optional()
+    .nullable(),
   created_at: z.string().optional(),
   updated_at: z.string().optional()
 });
@@ -122,17 +137,65 @@ export const goalSchema = z.object({
   updated_at: z.string().optional()
 });
 
-export const transactionFormSchema = z.object({
-  date: z.string().min(1, "Date is required"),
-  amount: z.string().min(1, "Amount is required"),
-  type: categoryTypeSchema,
-  category_id: z.string().uuid({ message: "Category is required" }),
-  account_id: z.string().uuid({ message: "Account is required" }),
-  currency_code: currencySchema.default("USD"),
-  merchant: z.string().optional(),
-  notes: z.string().optional(),
-  tags: z.string().optional()
-});
+export const transactionFormSchema = z
+  .object({
+    date: z.string().min(1, "Date is required"),
+    amount: z.string().min(1, "Amount is required"),
+    type: transactionKindSchema,
+    category_id: z.string().uuid().nullable().optional(),
+    account_id: z.string().uuid().nullable().optional(),
+    from_account_id: z.string().uuid().nullable().optional(),
+    to_account_id: z.string().uuid().nullable().optional(),
+    currency_code: currencySchema.default("USD"),
+    merchant: z.string().optional(),
+    notes: z.string().optional(),
+    tags: z.string().optional(),
+    splits: z
+      .array(
+        z.object({
+          category_id: z.string().uuid({ message: "Category is required" }),
+          amount: z.string().min(1, "Amount is required"),
+          note: z.string().optional()
+        })
+      )
+      .optional()
+  })
+  .superRefine((values, ctx) => {
+    const amountValue = Number(values.amount.replace(/[^0-9.-]/g, ""));
+    const splits = values.splits ?? [];
+    const hasSplits = splits.length > 0;
+
+    if (values.type === "transfer") {
+      if (!values.from_account_id) {
+        ctx.addIssue({ code: "custom", path: ["from_account_id"], message: "From account is required" });
+      }
+      if (!values.to_account_id) {
+        ctx.addIssue({ code: "custom", path: ["to_account_id"], message: "To account is required" });
+      }
+      if (values.from_account_id && values.to_account_id && values.from_account_id === values.to_account_id) {
+        ctx.addIssue({ code: "custom", path: ["to_account_id"], message: "Accounts must differ" });
+      }
+      return;
+    }
+
+    if (!values.account_id) {
+      ctx.addIssue({ code: "custom", path: ["account_id"], message: "Account is required" });
+    }
+
+    if (!hasSplits && !values.category_id) {
+      ctx.addIssue({ code: "custom", path: ["category_id"], message: "Category is required" });
+    }
+
+    if (hasSplits) {
+      const splitSum = splits.reduce((sum, split) => sum + Number(split.amount.replace(/[^0-9.-]/g, "") || 0), 0);
+      if (splitSum <= 0) {
+        ctx.addIssue({ code: "custom", path: ["splits"], message: "Split amounts must be greater than 0" });
+      }
+      if (amountValue > 0 && splitSum > amountValue + 0.0001) {
+        ctx.addIssue({ code: "custom", path: ["splits"], message: "Splits exceed total amount" });
+      }
+    }
+  });
 
 export const budgetFormSchema = z.object({
   month: z.string().min(1, "Month is required"),
@@ -184,3 +247,4 @@ export type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 export type OverallBudgetFormValues = z.infer<typeof overallBudgetFormSchema>;
 export type RecurringFormValues = z.infer<typeof recurringFormSchema>;
 export type GoalFormValues = z.infer<typeof goalFormSchema>;
+export type TransactionSplit = NonNullable<Transaction["transaction_splits"]>[number];

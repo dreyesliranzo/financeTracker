@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { successToast } from "@/lib/feedback";
+import { Badge } from "@/components/ui/badge";
 
 export function TransactionForm({
   transaction,
@@ -37,6 +38,7 @@ export function TransactionForm({
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [showSplits, setShowSplits] = useState(false);
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
     queryFn: fetchAccounts
@@ -78,28 +80,53 @@ export function TransactionForm({
         currency_code: savedDefaults?.currency_code ?? defaultCurrency,
         merchant: "",
         notes: "",
-        tags: ""
+        tags: "",
+        from_account_id: "",
+        to_account_id: "",
+        splits: []
       };
     }
 
     return {
       date: transaction.date,
       amount: (transaction.amount_cents / 100).toFixed(2),
-      type: transaction.type,
+      type: (transaction.transaction_kind ?? transaction.type) as TransactionFormValues["type"],
       category_id: transaction.category_id ?? "",
       account_id: transaction.account_id ?? "",
+      from_account_id: transaction.from_account_id ?? "",
+      to_account_id: transaction.to_account_id ?? "",
       currency_code: transaction.currency_code ?? "USD",
       merchant: transaction.merchant ?? "",
       notes: transaction.notes ?? "",
-      tags: transaction.tags?.join(", ") ?? ""
+      tags: transaction.tags?.join(", ") ?? "",
+      splits:
+        transaction.transaction_splits?.map((split) => ({
+          category_id: split.category_id ?? "",
+          amount: (split.amount_cents / 100).toFixed(2),
+          note: split.note ?? undefined
+        })) ?? []
     };
-  }, [transaction, defaultCurrency]);
+  }, [transaction, defaultCurrency, savedDefaults]);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues
   });
+  const splits = useFieldArray({
+    control: form.control,
+    name: "splits"
+  });
+  useEffect(() => {
+    const sub = form.watch((value, { name }) => {
+      if (!name || name.startsWith("splits")) {
+        setShowSplits((value.splits?.length ?? 0) > 0);
+      }
+    });
+    setShowSplits((form.getValues("splits")?.length ?? 0) > 0);
+    return () => sub.unsubscribe();
+  }, [form]);
   const accountId = form.watch("account_id");
+  const txType = form.watch("type");
 
   useEffect(() => {
     form.reset(defaultValues);
@@ -135,8 +162,11 @@ export function TransactionForm({
       date: values.date,
       amount_cents: Math.abs(parseCurrencyToCents(values.amount)),
       type: values.type,
-      category_id: values.category_id || null,
-      account_id: values.account_id || null,
+      transaction_kind: values.type,
+      category_id: values.type === "transfer" ? null : values.category_id || null,
+      account_id: values.type === "transfer" ? null : values.account_id || null,
+      from_account_id: values.type === "transfer" ? values.from_account_id || null : null,
+      to_account_id: values.type === "transfer" ? values.to_account_id || null : null,
       currency_code: values.currency_code,
       merchant: values.merchant?.trim() || null,
       notes: values.notes?.trim() || null,
@@ -145,7 +175,15 @@ export function TransactionForm({
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean)
-        : []
+        : [],
+      transaction_splits:
+        values.splits && values.splits.length > 0
+          ? values.splits.map((split) => ({
+              category_id: split.category_id,
+              amount_cents: Math.abs(parseCurrencyToCents(split.amount)),
+              note: split.note ?? null
+            }))
+          : undefined
     };
 
     try {
@@ -238,7 +276,7 @@ export function TransactionForm({
           <Label>Type</Label>
           <Select
             value={form.watch("type")}
-            onValueChange={(value) => form.setValue("type", value as "income" | "expense")}
+            onValueChange={(value) => form.setValue("type", value as TransactionFormValues["type"])}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
@@ -246,71 +284,214 @@ export function TransactionForm({
             <SelectContent>
               <SelectItem value="income">Income</SelectItem>
               <SelectItem value="expense">Expense</SelectItem>
+              <SelectItem value="transfer">Transfer</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label>Category</Label>
-          <Select
-            value={form.watch("category_id")}
-            onValueChange={(value) => form.setValue("category_id", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category.id!} value={category.id!}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {categories.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No categories yet.{" "}
-              <Link href={"/settings" as Route} className="text-primary">
-                Add categories in Settings.
-              </Link>
-            </p>
-          ) : null}
-          {form.formState.errors.category_id ? (
-            <p className="text-xs text-destructive">
-              {form.formState.errors.category_id.message}
-            </p>
-          ) : null}
-        </div>
-        <div className="space-y-2">
-          <Label>Account</Label>
-          <Select
-            value={form.watch("account_id")}
-            onValueChange={(value) => form.setValue("account_id", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select account" />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((account) => (
-                <SelectItem key={account.id!} value={account.id!}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {accounts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No accounts yet.{" "}
-              <Link href={"/settings" as Route} className="text-primary">
-                Add accounts in Settings.
-              </Link>
-            </p>
-          ) : null}
-          {form.formState.errors.account_id ? (
-            <p className="text-xs text-destructive">
-              {form.formState.errors.account_id.message}
-            </p>
-          ) : null}
-        </div>
+        {txType === "transfer" ? (
+          <>
+            <div className="space-y-2">
+              <Label>From account</Label>
+              <Select
+                value={form.watch("from_account_id")}
+                onValueChange={(value) => form.setValue("from_account_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id!} value={account.id!}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.formState.errors.from_account_id ? (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.from_account_id.message as string}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label>To account</Label>
+              <Select
+                value={form.watch("to_account_id")}
+                onValueChange={(value) => form.setValue("to_account_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id!} value={account.id!}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.formState.errors.to_account_id ? (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.to_account_id.message as string}
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={form.watch("category_id") ?? ""}
+                onValueChange={(value) => form.setValue("category_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id!} value={category.id!}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {categories.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No categories yet.{" "}
+                  <Link href={"/settings" as Route} className="text-primary">
+                    Add categories in Settings.
+                  </Link>
+                </p>
+              ) : null}
+              {form.formState.errors.category_id ? (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.category_id.message as string}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label>Account</Label>
+              <Select
+                value={form.watch("account_id") ?? ""}
+                onValueChange={(value) => form.setValue("account_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id!} value={account.id!}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {accounts.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No accounts yet.{" "}
+                  <Link href={"/settings" as Route} className="text-primary">
+                    Add accounts in Settings.
+                  </Link>
+                </p>
+              ) : null}
+              {form.formState.errors.account_id ? (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.account_id.message as string}
+                </p>
+              ) : null}
+            </div>
+          </>
+        )}
+        {txType !== "transfer" ? (
+          <div className="md:col-span-2 space-y-3 rounded-xl border border-dashed border-border/60 p-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Splits (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Allocate this transaction across multiple categories.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowSplits(true);
+                  splits.append({ category_id: "", amount: "", note: "" });
+                }}
+              >
+                Add split
+              </Button>
+            </div>
+            {showSplits && splits.fields.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No splits yet.</p>
+            ) : null}
+            {showSplits
+              ? splits.fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="grid gap-3 rounded-lg border border-border/60 p-3 md:grid-cols-4"
+                  >
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">Category</Label>
+                      <Select
+                        value={form.watch(`splits.${index}.category_id`)}
+                        onValueChange={(value) =>
+                          form.setValue(`splits.${index}.category_id`, value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id!} value={category.id!}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Amount</Label>
+                      <Input
+                        placeholder="0.00"
+                        {...form.register(`splits.${index}.amount`)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Note</Label>
+                      <Input
+                        placeholder="Optional"
+                        {...form.register(`splits.${index}.note`)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-end md:col-span-4">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          splits.remove(index);
+                          if (splits.fields.length - 1 <= 0) {
+                            setShowSplits(false);
+                          }
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              : null}
+            {form.formState.errors.splits ? (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.splits.message as string}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="merchant">Merchant</Label>
           <Input id="merchant" placeholder="Coffee shop" {...form.register("merchant")} />

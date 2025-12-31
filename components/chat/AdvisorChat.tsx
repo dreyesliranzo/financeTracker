@@ -80,7 +80,7 @@ export function AdvisorChat() {
   const topCategory = useMemo(() => {
     const totals = new Map<string, number>();
     transactions
-      .filter((transaction) => transaction.type === "expense")
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         const key = transaction.category_id ?? "uncategorized";
         totals.set(key, (totals.get(key) ?? 0) + transaction.amount_cents);
@@ -96,7 +96,10 @@ export function AdvisorChat() {
   const topMerchant = useMemo(() => {
     const totals = new Map<string, number>();
     transactions
-      .filter((transaction) => transaction.type === "expense" && transaction.merchant)
+      .filter(
+        (transaction) =>
+          (transaction.transaction_kind ?? transaction.type) === "expense" && transaction.merchant
+      )
       .forEach((transaction) => {
         const key = transaction.merchant ?? "Unknown";
         totals.set(key, (totals.get(key) ?? 0) + transaction.amount_cents);
@@ -115,7 +118,7 @@ export function AdvisorChat() {
     }
     const spentByCategory = new Map<string, number>();
     transactions
-      .filter((transaction) => transaction.type === "expense")
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         const key = transaction.category_id ?? "uncategorized";
         spentByCategory.set(key, (spentByCategory.get(key) ?? 0) + transaction.amount_cents);

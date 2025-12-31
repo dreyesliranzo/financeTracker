@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, PencilLine, Trash2, Eye, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
+import { formatCurrency, formatSignedCurrency, parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { fetchAccounts, fetchCategories, fetchProfile, fetchTransactionsPage } from "@/lib/supabase/queries";
 import { bulkDeleteTransactions, deleteTransaction, updateTransaction } from "@/lib/supabase/mutations";
@@ -83,7 +83,7 @@ export function TransactionsTable() {
         },
         filters: {
           currencyCode: currencyFilter === "all" ? undefined : currencyFilter,
-          type: typeFilter === "all" ? undefined : (typeFilter as "income" | "expense"),
+          type: typeFilter === "all" ? undefined : (typeFilter as "income" | "expense" | "transfer"),
           categoryId: categoryFilter === "all" ? undefined : categoryFilter,
           accountId: accountFilter === "all" ? undefined : accountFilter,
           search: deferredSearch.trim().length > 0 ? deferredSearch : undefined
@@ -300,6 +300,7 @@ export function TransactionsTable() {
                       <SelectItem value="all">All types</SelectItem>
                       <SelectItem value="income">Income</SelectItem>
                       <SelectItem value="expense">Expense</SelectItem>
+                      <SelectItem value="transfer">Transfer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -577,12 +578,20 @@ export function TransactionsTable() {
                   </TableRow>
                 ))
               : paged.map((transaction) => {
+                  const kind = (transaction.transaction_kind ?? transaction.type) as "income" | "expense" | "transfer";
                   const categoryName = transaction.category_id
                     ? categoryMap.get(transaction.category_id)
                     : undefined;
                   const accountName = transaction.account_id
                     ? accountMap.get(transaction.account_id)
                     : undefined;
+                  const fromAccount = transaction.from_account_id
+                    ? accountMap.get(transaction.from_account_id)
+                    : undefined;
+                  const toAccount = transaction.to_account_id
+                    ? accountMap.get(transaction.to_account_id)
+                    : undefined;
+                  const hasSplits = (transaction.transaction_splits?.length ?? 0) > 0;
                   return (
                     <TableRow
                       key={transaction.id}
@@ -602,23 +611,43 @@ export function TransactionsTable() {
                       </TableCell>
                       <TableCell>{transaction.date}</TableCell>
                       <TableCell>
-                        {inlineEditId === transaction.id ? (
-                          <Input
-                            value={inlineValues.merchant}
-                            onChange={(event) =>
-                              setInlineValues((prev) => ({
-                                ...prev,
-                                merchant: event.target.value
-                              }))
-                            }
-                          />
-                        ) : (
-                          transaction.merchant ?? "-"
-                        )}
+                        <div className="flex items-center gap-2">
+                          {inlineEditId === transaction.id ? (
+                            <Input
+                              value={inlineValues.merchant}
+                              onChange={(event) =>
+                                setInlineValues((prev) => ({
+                                  ...prev,
+                                  merchant: event.target.value
+                                }))
+                              }
+                            />
+                          ) : (
+                            <span>{transaction.merchant ?? "-"}</span>
+                          )}
+                          {kind === "transfer" ? (
+                            <Badge variant="outline" className="text-xs">
+                              Transfer
+                            </Badge>
+                          ) : null}
+                          {hasSplits ? (
+                            <Badge variant="outline" className="text-xs">
+                              Split
+                            </Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
-                      <TableCell>{categoryName ?? "-"}</TableCell>
-                      <TableCell>{accountName ?? "-"}</TableCell>
-                      <TableCell className="capitalize">{transaction.type}</TableCell>
+                      <TableCell>
+                        {hasSplits
+                          ? "Split across categories"
+                          : categoryName ?? "-"}
+                      </TableCell>
+                      <TableCell>
+                        {kind === "transfer"
+                          ? `${fromAccount ?? "—"} → ${toAccount ?? "—"}`
+                          : accountName ?? "-"}
+                      </TableCell>
+                      <TableCell className="capitalize">{kind}</TableCell>
                       <TableCell className="text-right font-medium">
                         {inlineEditId === transaction.id ? (
                           <Input
@@ -631,10 +660,12 @@ export function TransactionsTable() {
                             }
                             className="max-w-[120px] text-right"
                           />
+                        ) : kind === "transfer" ? (
+                          formatCurrency(transaction.amount_cents, transaction.currency_code ?? "USD")
                         ) : (
                           formatSignedCurrency(
                             transaction.amount_cents,
-                            transaction.type,
+                            kind === "income" ? "income" : "expense",
                             transaction.currency_code ?? "USD"
                           )
                         )}
@@ -750,27 +781,33 @@ export function TransactionsTable() {
                 <div>
                   <p className="text-xs uppercase">Category</p>
                   <p className="text-foreground">
-                    {detailTransaction.category_id
-                      ? categoryMap.get(detailTransaction.category_id) ?? "-"
-                      : "-"}
+                    {detailTransaction.transaction_splits?.length
+                      ? "Split across categories"
+                      : detailTransaction.category_id
+                        ? categoryMap.get(detailTransaction.category_id) ?? "-"
+                        : "-"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase">Account</p>
                   <p className="text-foreground">
-                    {detailTransaction.account_id
-                      ? accountMap.get(detailTransaction.account_id) ?? "-"
-                      : "-"}
+                    {(detailTransaction.transaction_kind ?? detailTransaction.type) === "transfer"
+                      ? `${accountMap.get(detailTransaction.from_account_id ?? "") ?? "—"} → ${accountMap.get(detailTransaction.to_account_id ?? "") ?? "—"}`
+                      : detailTransaction.account_id
+                        ? accountMap.get(detailTransaction.account_id) ?? "-"
+                        : "-"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase">Amount</p>
                   <p className="text-foreground font-semibold">
-                    {formatSignedCurrency(
-                      detailTransaction.amount_cents,
-                      detailTransaction.type,
-                      detailTransaction.currency_code ?? "USD"
-                    )}
+                    {(detailTransaction.transaction_kind ?? detailTransaction.type) === "transfer"
+                      ? formatCurrency(detailTransaction.amount_cents, detailTransaction.currency_code ?? "USD")
+                      : formatSignedCurrency(
+                          detailTransaction.amount_cents,
+                          (detailTransaction.transaction_kind ?? detailTransaction.type) === "income" ? "income" : "expense",
+                          detailTransaction.currency_code ?? "USD"
+                        )}
                   </p>
                 </div>
                 <div>

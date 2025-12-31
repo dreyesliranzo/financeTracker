@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { Stagger } from "@/components/layout/Stagger";
+import { sumIncomeExpense, categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -111,25 +112,14 @@ export default function DashboardPage() {
     );
   }, [categories]);
 
-  const scopedTransactions = useMemo(() => {
+  const scopedTransactions = useMemo<TransactionWithSplits[]>(() => {
     return transactions.filter(
       (transaction) => transaction.currency_code === selectedCurrency
-    );
+    ) as TransactionWithSplits[];
   }, [selectedCurrency, transactions]);
 
   const { income, expense, net } = useMemo(() => {
-    return scopedTransactions.reduce(
-      (acc, transaction) => {
-        if (transaction.type === "income") {
-          acc.income += transaction.amount_cents;
-        } else {
-          acc.expense += transaction.amount_cents;
-        }
-        acc.net = acc.income - acc.expense;
-        return acc;
-      },
-      { income: 0, expense: 0, net: 0 }
-    );
+    return sumIncomeExpense(scopedTransactions);
   }, [scopedTransactions]);
 
   const remainingBudget = useMemo(() => {
@@ -141,15 +131,8 @@ export default function DashboardPage() {
   }, [overallBudget, budgets, expense]);
 
   const expenseByCategory = useMemo(() => {
-    const totals = new Map<string, number>();
-    scopedTransactions
-      .filter((transaction) => transaction.type === "expense")
-      .forEach((transaction) => {
-        const key = transaction.category_id ?? "uncategorized";
-        totals.set(key, (totals.get(key) ?? 0) + transaction.amount_cents);
-      });
-
-    return Array.from(totals.entries())
+    const totals = categoryTotals(scopedTransactions);
+    return Object.entries(totals)
       .map(([categoryId, value]) => ({
         name: categoryNameMap.get(categoryId) ?? "Uncategorized",
         value: Math.round(value / 100)
@@ -160,17 +143,20 @@ export default function DashboardPage() {
 
   const cashflowData = useMemo(() => {
     const byDate = new Map<string, { income: number; expense: number }>();
-    scopedTransactions.forEach((transaction) => {
-      if (!byDate.has(transaction.date)) {
-        byDate.set(transaction.date, { income: 0, expense: 0 });
-      }
-      const entry = byDate.get(transaction.date)!;
-      if (transaction.type === "income") {
-        entry.income += transaction.amount_cents / 100;
-      } else {
-        entry.expense += transaction.amount_cents / 100;
-      }
-    });
+    scopedTransactions
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) !== "transfer")
+      .forEach((transaction) => {
+        if (!byDate.has(transaction.date)) {
+          byDate.set(transaction.date, { income: 0, expense: 0 });
+        }
+        const entry = byDate.get(transaction.date)!;
+        const kind = transaction.transaction_kind ?? transaction.type;
+        if (kind === "income") {
+          entry.income += transaction.amount_cents / 100;
+        } else {
+          entry.expense += transaction.amount_cents / 100;
+        }
+      });
 
     return Array.from(byDate.entries())
       .map(([date, values]) => ({ date, ...values }))
@@ -179,13 +165,15 @@ export default function DashboardPage() {
 
   const budgetProgress = useMemo(() => {
     return budgets.map((budget) => {
-      const spent = scopedTransactions
-        .filter(
-          (transaction) =>
-            transaction.type === "expense" &&
-            transaction.category_id === budget.category_id
-        )
-        .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
+      const spent = scopedTransactions.reduce((sum, transaction) => {
+        flattenSplits(transaction).forEach((line) => {
+          if (line.kind !== "expense") return;
+          if (line.category_id === budget.category_id) {
+            sum += line.amount_cents;
+          }
+        });
+        return sum;
+      }, 0);
 
       return {
         category: categoryNameMap.get(budget.category_id) ?? "Uncategorized",

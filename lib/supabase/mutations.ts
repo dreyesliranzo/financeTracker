@@ -7,7 +7,8 @@ import type {
   OverallBudget,
   Profile,
   RecurringTransaction,
-  Transaction
+  Transaction,
+  TransactionSplit
 } from "@/types";
 
 export async function createAccount(
@@ -78,32 +79,79 @@ export async function deleteCategory(id: string) {
   if (error) throw error;
 }
 
+type TransactionSplitInput = Pick<TransactionSplit, "category_id" | "amount_cents"> & {
+  note?: string | null;
+};
+
 export async function createTransaction(
   userId: string,
-  values: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at">
+  values: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "transaction_splits"> & {
+    transaction_splits?: TransactionSplitInput[];
+  }
 ) {
+  const { transaction_splits, ...rest } = values;
   const { data, error } = await supabaseBrowser()
     .from("transactions")
-    .insert({ ...values, user_id: userId })
-    .select("*")
+    .insert({ ...rest, user_id: userId, transaction_kind: rest.type })
+    .select("*, transaction_splits(id,category_id,amount_cents,note)")
     .single();
 
   if (error) throw error;
-  return data as Transaction;
+  const transaction = data as Transaction;
+
+  if (transaction_splits?.length) {
+    const { error: splitError } = await supabaseBrowser()
+      .from("transaction_splits")
+      .insert(
+        transaction_splits.map((split) => ({
+          ...split,
+          user_id: userId,
+          transaction_id: transaction.id
+        }))
+      );
+    if (splitError) throw splitError;
+  }
+
+  return transaction;
 }
 
 export async function updateTransaction(
   id: string,
-  values: Partial<Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at">>
+  values: Partial<Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "transaction_splits">> & {
+    transaction_splits?: TransactionSplitInput[];
+  }
 ) {
+  const { transaction_splits, ...rest } = values;
   const { data, error } = await supabaseBrowser()
     .from("transactions")
-    .update({ ...values, updated_at: new Date().toISOString() })
+    .update({ ...rest, transaction_kind: rest.type, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .select("*")
+    .select("*, transaction_splits(id,category_id,amount_cents,note)")
     .single();
 
   if (error) throw error;
+
+  if (transaction_splits) {
+    const txUserId = (data as Transaction).user_id;
+    const deleteResult = await supabaseBrowser()
+      .from("transaction_splits")
+      .delete()
+      .eq("transaction_id", id);
+    if (deleteResult.error) throw deleteResult.error;
+    if (transaction_splits.length) {
+      const insertResult = await supabaseBrowser()
+        .from("transaction_splits")
+        .insert(
+          transaction_splits.map((split) => ({
+            ...split,
+            user_id: txUserId,
+            transaction_id: id
+          }))
+        );
+      if (insertResult.error) throw insertResult.error;
+    }
+  }
+
   return data as Transaction;
 }
 

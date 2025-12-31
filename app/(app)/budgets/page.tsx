@@ -25,6 +25,7 @@ import { OverallBudgetForm } from "@/components/forms/OverallBudgetForm";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { Stagger } from "@/components/layout/Stagger";
+import { categoryTotals, flattenSplits, sumIncomeExpense, type TransactionWithSplits } from "@/lib/utils/transactions";
 
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -81,14 +82,14 @@ export default function BudgetsPage() {
     queryFn: () =>
       fetchTransactionsSummary({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
-  const transactions = transactionsQuery.data ?? [];
+  const transactions = (transactionsQuery.data ?? []) as TransactionWithSplits[];
 
   const prevTransactionsQuery = useQuery({
     queryKey: ["transactions", prevRangeStart, prevRangeEnd, selectedCurrency, "previous"],
     queryFn: () =>
       fetchTransactionsSummary({ start: prevRangeStart, end: prevRangeEnd }, selectedCurrency)
   });
-  const prevTransactions = prevTransactionsQuery.data ?? [];
+  const prevTransactions = (prevTransactionsQuery.data ?? []) as TransactionWithSplits[];
 
   const isLoading =
     budgetsQuery.isLoading ||
@@ -114,37 +115,34 @@ export default function BudgetsPage() {
   }, [categories]);
 
   const budgetsWithProgress = useMemo(() => {
-    const prevSpentByCategory = new Map<string, number>();
-    prevTransactions
-      .filter(
+    const prevSpentByCategory = categoryTotals(
+      prevTransactions.filter(
         (transaction) =>
-          transaction.type === "expense" &&
+          (transaction.transaction_kind ?? transaction.type) !== "transfer" &&
           (accountFilter === "all" || transaction.account_id === accountFilter)
       )
-      .forEach((transaction) => {
-        const key = transaction.category_id ?? "uncategorized";
-        prevSpentByCategory.set(
-          key,
-          (prevSpentByCategory.get(key) ?? 0) + transaction.amount_cents
-        );
-      });
+    );
 
     const prevBudgetByCategory = new Map(
       previousBudgets.map((budget) => [budget.category_id, budget.limit_cents])
     );
 
     return budgets.map((budget) => {
-      const spent = transactions
-        .filter(
-          (transaction) =>
-            transaction.type === "expense" &&
-            transaction.category_id === budget.category_id &&
-            (accountFilter === "all" || transaction.account_id === accountFilter)
-        )
-        .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
+      const spent = transactions.reduce((sum, transaction) => {
+        if (accountFilter !== "all" && transaction.account_id !== accountFilter) {
+          return sum;
+        }
+        flattenSplits(transaction).forEach((line) => {
+          if (line.kind !== "expense") return;
+          if (line.category_id === budget.category_id) {
+            sum += line.amount_cents;
+          }
+        });
+        return sum;
+      }, 0);
 
       const prevLimit = prevBudgetByCategory.get(budget.category_id) ?? 0;
-      const prevSpent = prevSpentByCategory.get(budget.category_id) ?? 0;
+      const prevSpent = prevSpentByCategory[budget.category_id] ?? 0;
       const carryover = Math.max(0, prevLimit - prevSpent);
 
       return {
@@ -165,13 +163,15 @@ export default function BudgetsPage() {
   ]);
 
   const overallSpent = useMemo(() => {
-    return transactions
-      .filter(
-        (transaction) =>
-          transaction.type === "expense" &&
-          (accountFilter === "all" || transaction.account_id === accountFilter)
-      )
-      .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
+    return transactions.reduce((sum, transaction) => {
+      if (accountFilter !== "all" && transaction.account_id !== accountFilter) return sum;
+      flattenSplits(transaction).forEach((line) => {
+        if (line.kind === "expense") {
+          sum += line.amount_cents;
+        }
+      });
+      return sum;
+    }, 0);
   }, [accountFilter, transactions]);
 
   const overallRatio =

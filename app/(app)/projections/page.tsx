@@ -60,7 +60,9 @@ export default function ProjectionsPage() {
   const totals = useMemo(() => {
     return transactions.reduce(
       (acc, transaction) => {
-        if (transaction.type === "income") {
+        const kind = transaction.transaction_kind ?? transaction.type;
+        if (kind === "transfer") return acc;
+        if (kind === "income") {
           acc.income += transaction.amount_cents;
         } else {
           acc.expense += transaction.amount_cents;

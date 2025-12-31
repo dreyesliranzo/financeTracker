@@ -84,7 +84,7 @@ export default function InsightsPage() {
     const sum = (items: typeof current) =>
       items.reduce(
         (acc, transaction) => {
-          if (transaction.type === "income") {
+          if ((transaction.transaction_kind ?? transaction.type) === "income") {
             acc.income += transaction.amount_cents;
           } else {
             acc.expense += transaction.amount_cents;
@@ -103,7 +103,7 @@ export default function InsightsPage() {
   const topCategories = useMemo(() => {
     const totalsByCategory = new Map<string, number>();
     current
-      .filter((transaction) => transaction.type === "expense")
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         const key = transaction.category_id ?? "uncategorized";
         totalsByCategory.set(
@@ -125,7 +125,7 @@ export default function InsightsPage() {
   const topMerchants = useMemo(() => {
     const totalsByMerchant = new Map<string, number>();
     current
-      .filter((transaction) => transaction.type === "expense")
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         if (!transaction.merchant) return;
         totalsByMerchant.set(
@@ -144,7 +144,7 @@ export default function InsightsPage() {
   const weekdaySpend = useMemo(() => {
     const totalsByDay = new Map<string, number>();
     current
-      .filter((transaction) => transaction.type === "expense")
+      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         const day = format(new Date(transaction.date), "EEE");
         totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + transaction.amount_cents);
@@ -161,7 +161,7 @@ export default function InsightsPage() {
     const daily = new Map<string, number>();
     current.forEach((transaction) => {
       const value =
-        transaction.type === "income"
+        (transaction.transaction_kind ?? transaction.type) === "income"
           ? transaction.amount_cents
           : -transaction.amount_cents;
       daily.set(transaction.date, (daily.get(transaction.date) ?? 0) + value);

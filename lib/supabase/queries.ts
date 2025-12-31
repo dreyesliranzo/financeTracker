@@ -16,17 +16,21 @@ type DateRange = {
 };
 
 type TransactionFilters = {
-  type?: "income" | "expense";
+  type?: "income" | "expense" | "transfer";
   categoryId?: string;
   accountId?: string;
   currencyCode?: string;
   search?: string;
 };
 
-type TransactionSummary = Pick<
-  Transaction,
-  "id" | "date" | "amount_cents" | "type" | "category_id" | "account_id" | "currency_code" | "merchant"
->;
+type TransactionSummary = Transaction & {
+  transaction_splits?: {
+    id: string;
+    category_id: string | null;
+    amount_cents: number;
+    note?: string | null;
+  }[];
+};
 
 export async function fetchAccounts() {
   const { data, error } = await supabaseBrowser()
@@ -51,7 +55,7 @@ export async function fetchCategories() {
 export async function fetchTransactions(range?: DateRange, currencyCode?: string) {
   let query = supabaseBrowser()
     .from("transactions")
-    .select("*")
+    .select("*, transaction_splits(id,category_id,amount_cents,note)")
     .order("date", { ascending: false });
 
   if (range?.start) {
@@ -76,7 +80,7 @@ export async function fetchTransactionsSummary(
   currencyCode?: string
 ) {
   const fields =
-    "id,date,amount_cents,type,category_id,account_id,currency_code,merchant" as const;
+    "id,date,amount_cents,type,transaction_kind,category_id,account_id,from_account_id,to_account_id,currency_code,merchant,transaction_splits(id,category_id,amount_cents,note)" as const;
 
   let query = supabaseBrowser()
     .from("transactions")
@@ -114,7 +118,7 @@ export async function fetchTransactionsPage(
   let query = supabaseBrowser()
     .from("transactions")
     .select(
-      "id,date,amount_cents,type,category_id,account_id,currency_code,merchant",
+      "id,date,amount_cents,type,transaction_kind,category_id,account_id,from_account_id,to_account_id,currency_code,merchant,transaction_splits(id,category_id,amount_cents,note)",
       { count: "exact" }
     )
     .order(orderKey, { ascending: false });
