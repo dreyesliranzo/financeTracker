@@ -17,7 +17,7 @@ import {
   fetchCategories,
   fetchOverallBudgets,
   fetchProfile,
-  fetchTransactions
+  fetchTransactionsSummary
 } from "@/lib/supabase/queries";
 import { deleteBudget, deleteOverallBudget } from "@/lib/supabase/mutations";
 import { BudgetForm } from "@/components/forms/BudgetForm";
@@ -77,13 +77,15 @@ export default function BudgetsPage() {
 
   const transactionsQuery = useQuery({
     queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
+    queryFn: () =>
+      fetchTransactionsSummary({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
   const transactions = transactionsQuery.data ?? [];
 
   const prevTransactionsQuery = useQuery({
     queryKey: ["transactions", prevRangeStart, prevRangeEnd, selectedCurrency, "previous"],
-    queryFn: () => fetchTransactions({ start: prevRangeStart, end: prevRangeEnd }, selectedCurrency)
+    queryFn: () =>
+      fetchTransactionsSummary({ start: prevRangeStart, end: prevRangeEnd }, selectedCurrency)
   });
   const prevTransactions = prevTransactionsQuery.data ?? [];
 

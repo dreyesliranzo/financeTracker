@@ -15,7 +15,7 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-accent="iris">
       <body
         className={`${spaceGrotesk.variable} ${plexMono.variable} min-h-screen bg-background text-foreground`}
       >

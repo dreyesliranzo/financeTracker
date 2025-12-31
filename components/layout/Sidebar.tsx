@@ -7,6 +7,8 @@ import {
   BarChart3,
   CreditCard,
   LayoutDashboard,
+  LineChart,
+  MessageSquare,
   Repeat,
   Settings,
   Target,
@@ -21,6 +23,8 @@ const navItems = [
   { href: "/budgets", label: "Budgets", icon: Wallet },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/insights", label: "Insights", icon: BarChart3 },
+  { href: "/projections", label: "Projections", icon: LineChart },
+  { href: "/advisor", label: "Advisor", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings }
 ] as const;
 

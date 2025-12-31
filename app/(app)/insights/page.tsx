@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import { fetchCategories, fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { NetTrendChart } from "@/components/charts/NetTrendChart";
@@ -42,9 +42,10 @@ export default function InsightsPage() {
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions", previousStart, rangeEnd, selectedCurrency],
     queryFn: () =>
-      fetchTransactions(
+      fetchTransactionsSummary(
         { start: previousStart, end: rangeEnd },
-        selectedCurrency
+        selectedCurrency,
+        true
       )
   });
 

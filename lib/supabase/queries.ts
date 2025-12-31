@@ -23,6 +23,11 @@ type TransactionFilters = {
   search?: string;
 };
 
+type TransactionSummary = Pick<
+  Transaction,
+  "id" | "date" | "amount_cents" | "type" | "category_id" | "account_id" | "currency_code" | "merchant"
+>;
+
 export async function fetchAccounts() {
   const { data, error } = await supabaseBrowser()
     .from("accounts")
@@ -64,6 +69,37 @@ export async function fetchTransactions(range?: DateRange, currencyCode?: string
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Transaction[];
+}
+
+export async function fetchTransactionsSummary(
+  range?: DateRange,
+  currencyCode?: string,
+  includeMerchant = false
+) {
+  const fields = includeMerchant
+    ? "id,date,amount_cents,type,category_id,account_id,currency_code,merchant"
+    : "id,date,amount_cents,type,category_id,account_id,currency_code";
+
+  let query = supabaseBrowser()
+    .from("transactions")
+    .select(fields)
+    .order("date", { ascending: false });
+
+  if (range?.start) {
+    query = query.gte("date", range.start);
+  }
+
+  if (range?.end) {
+    query = query.lte("date", range.end);
+  }
+
+  if (currencyCode) {
+    query = query.eq("currency_code", currencyCode);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as TransactionSummary[];
 }
 
 export async function fetchTransactionsPage(

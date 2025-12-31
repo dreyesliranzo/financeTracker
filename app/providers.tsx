@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { RealtimeProvider } from "@/components/providers/RealtimeProvider";
 import { BootstrapProvider } from "@/components/providers/BootstrapProvider";
 import { SuccessOverlay } from "@/components/ui/SuccessOverlay";
+import { AccentProvider } from "@/components/providers/AccentProvider";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -24,15 +25,17 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BootstrapProvider>
-            <RealtimeProvider>{children}</RealtimeProvider>
-          </BootstrapProvider>
-        </AuthProvider>
-        <Toaster richColors />
-        <SuccessOverlay />
-      </QueryClientProvider>
+      <AccentProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <BootstrapProvider>
+              <RealtimeProvider>{children}</RealtimeProvider>
+            </BootstrapProvider>
+          </AuthProvider>
+          <Toaster richColors />
+          <SuccessOverlay />
+        </QueryClientProvider>
+      </AccentProvider>
     </ThemeProvider>
   );
 }

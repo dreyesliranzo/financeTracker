@@ -31,9 +31,11 @@ import { parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { createAccount, createCategory, createTransaction } from "@/lib/supabase/mutations";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { useAccent } from "@/components/providers/AccentProvider";
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { accent, options: accentOptions, setAccent } = useAccent();
   const queryClient = useQueryClient();
   type CurrencyCode = (typeof currencyOptions)[number]["value"];
   const didInitCurrency = useRef(false);
@@ -743,6 +745,26 @@ export default function SettingsPage() {
                     {currencyOptions.map((currency) => (
                       <SelectItem key={currency.value} value={currency.value}>
                         {currency.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Accent theme</p>
+                  <p className="text-sm text-muted-foreground">
+                    Customize the primary color and background glow.
+                  </p>
+                </div>
+                <Select value={accent} onValueChange={setAccent}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accentOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

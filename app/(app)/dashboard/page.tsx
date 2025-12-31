@@ -13,7 +13,7 @@ import {
   fetchGoals,
   fetchOverallBudgets,
   fetchProfile,
-  fetchTransactions
+  fetchTransactionsSummary
 } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
@@ -38,7 +38,8 @@ export default function DashboardPage() {
 
   const transactionsQuery = useQuery({
     queryKey: ["transactions", rangeStart, rangeEnd, selectedCurrency],
-    queryFn: () => fetchTransactions({ start: rangeStart, end: rangeEnd }, selectedCurrency)
+    queryFn: () =>
+      fetchTransactionsSummary({ start: rangeStart, end: rangeEnd }, selectedCurrency)
   });
   const transactions = transactionsQuery.data ?? [];
 

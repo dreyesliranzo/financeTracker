@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       ? "reconnecting"
       : "offline"
   );
+  const invalidateTimers = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (!user) {
@@ -58,10 +60,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`
         },
         () => {
-          queryClient.invalidateQueries({
-            predicate: (query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === table
-          });
+          if (invalidateTimers.current.has(table)) return;
+          const timer = window.setTimeout(() => {
+            queryClient.invalidateQueries({
+              predicate: (query) =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === table
+            });
+            invalidateTimers.current.delete(table);
+          }, 300);
+          invalidateTimers.current.set(table, timer);
         }
       );
     });
@@ -88,6 +95,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      invalidateTimers.current.forEach((timer) => window.clearTimeout(timer));
+      invalidateTimers.current.clear();
     };
   }, [queryClient, user]);
 

@@ -30,6 +30,8 @@ const navItems = [
   { href: "/budgets", label: "Budgets" },
   { href: "/goals", label: "Goals" },
   { href: "/insights", label: "Insights" },
+  { href: "/projections", label: "Projections" },
+  { href: "/advisor", label: "Advisor" },
   { href: "/settings", label: "Settings" }
 ] as const;
 
@@ -40,6 +42,8 @@ const titleMap: Record<string, string> = {
   "/budgets": "Budgets",
   "/goals": "Goals",
   "/insights": "Insights",
+  "/projections": "Projections",
+  "/advisor": "Advisor",
   "/settings": "Settings"
 };
 
