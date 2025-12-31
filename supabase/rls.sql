@@ -6,6 +6,11 @@ alter table overall_budgets enable row level security;
 alter table profiles enable row level security;
 alter table recurring_transactions enable row level security;
 alter table goals enable row level security;
+alter table transaction_splits enable row level security;
+alter table categorization_rules enable row level security;
+alter table recurring_rules enable row level security;
+alter table recurring_runs enable row level security;
+alter table transaction_attachments enable row level security;
 
 create policy "Accounts are viewable by owner" on accounts
   for select using (auth.uid() = user_id);
@@ -77,4 +82,49 @@ create policy "Goals insert by owner" on goals
 create policy "Goals update by owner" on goals
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Goals delete by owner" on goals
+  for delete using (auth.uid() = user_id);
+
+create policy "Transaction splits viewable by owner" on transaction_splits
+  for select using (auth.uid() = user_id);
+create policy "Transaction splits insert by owner" on transaction_splits
+  for insert with check (auth.uid() = user_id);
+create policy "Transaction splits update by owner" on transaction_splits
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Transaction splits delete by owner" on transaction_splits
+  for delete using (auth.uid() = user_id);
+
+create policy "Categorization rules viewable by owner" on categorization_rules
+  for select using (auth.uid() = user_id);
+create policy "Categorization rules insert by owner" on categorization_rules
+  for insert with check (auth.uid() = user_id);
+create policy "Categorization rules update by owner" on categorization_rules
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Categorization rules delete by owner" on categorization_rules
+  for delete using (auth.uid() = user_id);
+
+create policy "Recurring rules viewable by owner" on recurring_rules
+  for select using (auth.uid() = user_id);
+create policy "Recurring rules insert by owner" on recurring_rules
+  for insert with check (auth.uid() = user_id);
+create policy "Recurring rules update by owner" on recurring_rules
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Recurring rules delete by owner" on recurring_rules
+  for delete using (auth.uid() = user_id);
+
+create policy "Recurring runs viewable by owner" on recurring_runs
+  for select using (auth.uid() = user_id);
+create policy "Recurring runs insert by owner" on recurring_runs
+  for insert with check (auth.uid() = user_id);
+create policy "Recurring runs update by owner" on recurring_runs
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Recurring runs delete by owner" on recurring_runs
+  for delete using (auth.uid() = user_id);
+
+create policy "Attachments viewable by owner" on transaction_attachments
+  for select using (auth.uid() = user_id);
+create policy "Attachments insert by owner" on transaction_attachments
+  for insert with check (auth.uid() = user_id);
+create policy "Attachments update by owner" on transaction_attachments
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Attachments delete by owner" on transaction_attachments
   for delete using (auth.uid() = user_id);

@@ -23,9 +23,12 @@ create table if not exists transactions (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   date date not null,
   amount_cents int not null,
-  type text not null check (type in ('income', 'expense')),
+  type text not null,
+  transaction_kind text not null default 'expense' check (transaction_kind in ('income', 'expense', 'transfer')),
   category_id uuid references categories(id) on delete set null,
   account_id uuid references accounts(id) on delete set null,
+  from_account_id uuid references accounts(id) on delete set null,
+  to_account_id uuid references accounts(id) on delete set null,
   currency_code text not null default 'USD',
   merchant text,
   notes text,
@@ -33,6 +36,10 @@ create table if not exists transactions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table transactions
+  drop constraint if exists transactions_type_check,
+  add constraint transactions_type_check check (type in ('income', 'expense', 'transfer'));
 
 create table if not exists budgets (
   id uuid primary key default gen_random_uuid(),
@@ -106,6 +113,59 @@ create trigger set_transactions_updated_at
 before update on transactions
 for each row
 execute function set_updated_at();
+
+create table if not exists transaction_splits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  transaction_id uuid not null references transactions(id) on delete cascade,
+  category_id uuid references categories(id) on delete set null,
+  amount_cents int not null,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists categorization_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  priority int not null default 100,
+  enabled boolean not null default true,
+  conditions jsonb not null,
+  actions jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists recurring_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null,
+  enabled boolean not null default true,
+  schedule_type text not null check (schedule_type in ('cron', 'rrule')),
+  schedule_text text not null,
+  timezone text not null default 'UTC',
+  next_run_at timestamptz,
+  template jsonb not null,
+  created_at timestamptz not null default now(),
+  last_run_at timestamptz
+);
+
+create table if not exists recurring_runs (
+  id uuid primary key default gen_random_uuid(),
+  rule_id uuid not null references recurring_rules(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  scheduled_for timestamptz not null,
+  ran_at timestamptz,
+  status text not null default 'pending',
+  created_transaction_ids uuid[] default '{}'::uuid[]
+);
+
+create table if not exists transaction_attachments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  transaction_id uuid not null references transactions(id) on delete cascade,
+  storage_path text not null,
+  mime_type text,
+  created_at timestamptz not null default now()
+);
 
 create trigger set_recurring_updated_at
 before update on recurring_transactions
