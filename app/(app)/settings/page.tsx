@@ -15,7 +15,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { AccountForm } from "@/components/forms/AccountForm";
 import { CategoryForm } from "@/components/forms/CategoryForm";
-import { fetchAccounts, fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import {
+  fetchAccounts,
+  fetchBudgets,
+  fetchCategories,
+  fetchOverallBudgets,
+  fetchProfile,
+  fetchTransactions
+} from "@/lib/supabase/queries";
 import { deleteAccount, deleteCategory, upsertProfile } from "@/lib/supabase/mutations";
 import { parseCsv } from "@/lib/csv/parse";
 import { requiredCsvFields, type CsvMapping } from "@/lib/csv/mapping";
@@ -45,6 +52,10 @@ export default function SettingsPage() {
   const { data: budgets = [] } = useQuery({
     queryKey: ["budgets"],
     queryFn: () => fetchBudgets()
+  });
+  const { data: overallBudgets = [] } = useQuery({
+    queryKey: ["overall_budgets"],
+    queryFn: () => fetchOverallBudgets()
   });
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -321,7 +332,7 @@ export default function SettingsPage() {
   };
 
   const handleExportJson = () => {
-    const payload = { accounts, categories, transactions, budgets };
+    const payload = { accounts, categories, transactions, budgets, overall_budgets: overallBudgets };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json"
     });
@@ -342,6 +353,7 @@ export default function SettingsPage() {
         categories?: Array<Record<string, unknown>>;
         transactions?: Array<Record<string, unknown>>;
         budgets?: Array<Record<string, unknown>>;
+        overall_budgets?: Array<Record<string, unknown>>;
       };
 
       const supabase = supabaseBrowser();
@@ -367,6 +379,12 @@ export default function SettingsPage() {
         const { error } = await supabase
           .from("budgets")
           .upsert(parsed.budgets.map((item) => ({ ...item, user_id: user.id })));
+        if (error) throw error;
+      }
+      if (parsed.overall_budgets?.length) {
+        const { error } = await supabase
+          .from("overall_budgets")
+          .upsert(parsed.overall_budgets.map((item) => ({ ...item, user_id: user.id })));
         if (error) throw error;
       }
 

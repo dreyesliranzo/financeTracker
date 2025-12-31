@@ -21,6 +21,7 @@ export default function InsightsPage() {
   );
   const [rangeEnd, setRangeEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const cardHover = "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10";
 
   const rangeStartDate = parseISO(rangeStart);
   const rangeEndDate = parseISO(rangeEnd);
@@ -232,7 +233,7 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className={cardHover}>
           <CardHeader>
             <CardTitle>Income delta</CardTitle>
           </CardHeader>
@@ -245,7 +246,7 @@ export default function InsightsPage() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={cardHover}>
           <CardHeader>
             <CardTitle>Expense delta</CardTitle>
           </CardHeader>
@@ -260,7 +261,7 @@ export default function InsightsPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className={cardHover}>
         <CardHeader>
           <CardTitle>Net trend</CardTitle>
         </CardHeader>
@@ -270,7 +271,7 @@ export default function InsightsPage() {
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className={cardHover}>
           <CardHeader>
             <CardTitle>Top categories</CardTitle>
           </CardHeader>
@@ -327,7 +328,7 @@ export default function InsightsPage() {
             ))}
           </CardContent>
         </Card>
-        <Card>
+        <Card className={cardHover}>
           <CardHeader>
             <CardTitle>Top merchants</CardTitle>
           </CardHeader>
@@ -344,7 +345,7 @@ export default function InsightsPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className={cardHover}>
         <CardHeader>
           <CardTitle>Weekday spend distribution</CardTitle>
         </CardHeader>

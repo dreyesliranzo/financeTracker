@@ -4,6 +4,7 @@ import type {
   Budget,
   Category,
   Goal,
+  OverallBudget,
   Profile,
   RecurringTransaction,
   Transaction
@@ -136,6 +137,25 @@ export async function fetchBudgets(month?: string, currencyCode?: string) {
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Budget[];
+}
+
+export async function fetchOverallBudgets(month?: string, currencyCode?: string) {
+  let query = supabaseBrowser()
+    .from("overall_budgets")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (month) {
+    query = query.eq("month", month);
+  }
+
+  if (currencyCode) {
+    query = query.eq("currency_code", currencyCode);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as OverallBudget[];
 }
 
 export async function fetchRecurringTransactions() {

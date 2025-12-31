@@ -7,12 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
+import {
+  fetchBudgets,
+  fetchCategories,
+  fetchGoals,
+  fetchOverallBudgets,
+  fetchProfile,
+  fetchTransactions
+} from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { ExpenseByCategoryChart } from "@/components/charts/ExpenseByCategoryChart";
 import { CashflowChart } from "@/components/charts/CashflowChart";
 import { BudgetProgressList } from "@/components/charts/BudgetProgressList";
+import { GoalProgressList } from "@/components/charts/GoalProgressList";
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -46,7 +54,24 @@ export default function DashboardPage() {
   });
   const budgets = budgetsQuery.data ?? [];
 
-  const isLoading = transactionsQuery.isLoading || budgetsQuery.isLoading || categoriesQuery.isLoading;
+  const overallBudgetsQuery = useQuery({
+    queryKey: ["overall_budgets", month, selectedCurrency],
+    queryFn: () => fetchOverallBudgets(`${month}-01`, selectedCurrency)
+  });
+  const overallBudget = overallBudgetsQuery.data?.[0] ?? null;
+
+  const goalsQuery = useQuery({
+    queryKey: ["goals", selectedCurrency],
+    queryFn: () => fetchGoals(selectedCurrency)
+  });
+  const goals = goalsQuery.data ?? [];
+
+  const isLoading =
+    transactionsQuery.isLoading ||
+    budgetsQuery.isLoading ||
+    categoriesQuery.isLoading ||
+    overallBudgetsQuery.isLoading ||
+    goalsQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
@@ -84,9 +109,12 @@ export default function DashboardPage() {
   }, [scopedTransactions]);
 
   const remainingBudget = useMemo(() => {
+    if (overallBudget) {
+      return overallBudget.limit_cents - expense;
+    }
     const totalLimit = budgets.reduce((sum, budget) => sum + budget.limit_cents, 0);
     return totalLimit - expense;
-  }, [budgets, expense]);
+  }, [overallBudget, budgets, expense]);
 
   const expenseByCategory = useMemo(() => {
     const totals = new Map<string, number>();
@@ -143,6 +171,17 @@ export default function DashboardPage() {
     });
   }, [budgets, scopedTransactions, categoryNameMap]);
 
+  const goalProgress = useMemo(() => {
+    return goals
+      .map((goal) => ({
+        name: goal.name,
+        current: goal.current_cents,
+        target: goal.target_cents
+      }))
+      .sort((a, b) => b.target - a.target)
+      .slice(0, 4);
+  }, [goals]);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -181,7 +220,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
           <CardHeader className="pb-2">
           <CardTitle className="text-sm text-muted-foreground">Net</CardTitle>
         </CardHeader>
@@ -195,7 +234,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-        <Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Income</CardTitle>
           </CardHeader>
@@ -209,7 +248,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-        <Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Expenses</CardTitle>
           </CardHeader>
@@ -223,7 +262,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-        <Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               Remaining budget
@@ -233,8 +272,13 @@ export default function DashboardPage() {
           {isLoading ? (
             <Skeleton className="h-8 w-28" />
           ) : (
-            <div className="text-2xl font-semibold">
-              {formatCurrency(remainingBudget, selectedCurrency)}
+            <div>
+              <div className="text-2xl font-semibold">
+                {formatCurrency(remainingBudget, selectedCurrency)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {overallBudget ? "General budget" : "Category budgets"}
+              </p>
             </div>
           )}
         </CardContent>
@@ -242,7 +286,7 @@ export default function DashboardPage() {
     </div>
 
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
+      <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
         <CardHeader>
           <CardTitle>Expenses by category</CardTitle>
         </CardHeader>
@@ -254,7 +298,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-      <Card>
+      <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
         <CardHeader>
           <CardTitle>Cashflow</CardTitle>
         </CardHeader>
@@ -268,26 +312,47 @@ export default function DashboardPage() {
       </Card>
     </div>
 
-      <Card>
-      <CardHeader>
-        <CardTitle>Budget progress</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : budgetProgress.length > 0 ? (
-          <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Set a budget to track your progress.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+          <CardHeader>
+            <CardTitle>Budget progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : budgetProgress.length > 0 ? (
+              <BudgetProgressList items={budgetProgress} currencyCode={selectedCurrency} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Set a budget to track your progress.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+          <CardHeader>
+            <CardTitle>Goals progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : goalProgress.length > 0 ? (
+              <GoalProgressList items={goalProgress} currencyCode={selectedCurrency} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Create goals to track progress here.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
   </div>
   );
 }

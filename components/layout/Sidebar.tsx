@@ -7,6 +7,7 @@ import {
   BarChart3,
   CreditCard,
   LayoutDashboard,
+  Repeat,
   Settings,
   Target,
   Wallet
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: CreditCard },
+  { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/budgets", label: "Budgets", icon: Wallet },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/insights", label: "Insights", icon: BarChart3 },

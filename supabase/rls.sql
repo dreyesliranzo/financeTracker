@@ -2,6 +2,7 @@ alter table accounts enable row level security;
 alter table categories enable row level security;
 alter table transactions enable row level security;
 alter table budgets enable row level security;
+alter table overall_budgets enable row level security;
 alter table profiles enable row level security;
 alter table recurring_transactions enable row level security;
 alter table goals enable row level security;
@@ -40,6 +41,15 @@ create policy "Budgets insert by owner" on budgets
 create policy "Budgets update by owner" on budgets
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Budgets delete by owner" on budgets
+  for delete using (auth.uid() = user_id);
+
+create policy "Overall budgets viewable by owner" on overall_budgets
+  for select using (auth.uid() = user_id);
+create policy "Overall budgets insert by owner" on overall_budgets
+  for insert with check (auth.uid() = user_id);
+create policy "Overall budgets update by owner" on overall_budgets
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Overall budgets delete by owner" on overall_budgets
   for delete using (auth.uid() = user_id);
 
 create policy "Profiles viewable by owner" on profiles

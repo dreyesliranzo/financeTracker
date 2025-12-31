@@ -11,9 +11,17 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAccounts, fetchBudgets, fetchCategories, fetchProfile, fetchTransactions } from "@/lib/supabase/queries";
-import { deleteBudget } from "@/lib/supabase/mutations";
+import {
+  fetchAccounts,
+  fetchBudgets,
+  fetchCategories,
+  fetchOverallBudgets,
+  fetchProfile,
+  fetchTransactions
+} from "@/lib/supabase/queries";
+import { deleteBudget, deleteOverallBudget } from "@/lib/supabase/mutations";
 import { BudgetForm } from "@/components/forms/BudgetForm";
+import { OverallBudgetForm } from "@/components/forms/OverallBudgetForm";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 
@@ -42,6 +50,12 @@ export default function BudgetsPage() {
     queryFn: () => fetchBudgets(`${month}-01`, selectedCurrency)
   });
   const budgets = budgetsQuery.data ?? [];
+
+  const overallBudgetsQuery = useQuery({
+    queryKey: ["overall_budgets", month, selectedCurrency],
+    queryFn: () => fetchOverallBudgets(`${month}-01`, selectedCurrency)
+  });
+  const overallBudget = overallBudgetsQuery.data?.[0] ?? null;
 
   const previousBudgetsQuery = useQuery({
     queryKey: ["budgets", prevMonth, selectedCurrency, "previous"],
@@ -75,6 +89,7 @@ export default function BudgetsPage() {
 
   const isLoading =
     budgetsQuery.isLoading ||
+    overallBudgetsQuery.isLoading ||
     categoriesQuery.isLoading ||
     transactionsQuery.isLoading ||
     previousBudgetsQuery.isLoading ||
@@ -146,6 +161,21 @@ export default function BudgetsPage() {
     transactions
   ]);
 
+  const overallSpent = useMemo(() => {
+    return transactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          (accountFilter === "all" || transaction.account_id === accountFilter)
+      )
+      .reduce((sum, transaction) => sum + transaction.amount_cents, 0);
+  }, [accountFilter, transactions]);
+
+  const overallRatio =
+    overallBudget && overallBudget.limit_cents
+      ? overallSpent / overallBudget.limit_cents
+      : 0;
+
   const alertBudgets = useMemo(() => {
     return budgetsWithProgress.filter((budget) => {
       const ratio = budget.effectiveLimit
@@ -158,11 +188,22 @@ export default function BudgetsPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteBudget(id);
-      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
       toast.success("Budget deleted");
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete budget");
+    }
+  };
+
+  const handleDeleteOverall = async (id: string) => {
+    try {
+      await deleteOverallBudget(id);
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      toast.success("General budget deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to delete general budget");
     }
   };
 
@@ -224,8 +265,81 @@ export default function BudgetsPage() {
         </div>
       </div>
 
+      <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle>General budget</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Track total spending across categories.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  {overallBudget ? "Edit" : "Set budget"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <OverallBudgetForm budget={overallBudget} />
+              </DialogContent>
+            </Dialog>
+            {overallBudget ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete general budget?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDeleteOverall(overallBudget.id!)}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {overallBudget ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {formatCurrency(overallSpent, selectedCurrency)} of{" "}
+                {formatCurrency(overallBudget.limit_cents, selectedCurrency)}
+              </p>
+              <div className="mt-3 h-2 w-full rounded-full bg-muted/40">
+                <div
+                  className="h-2 rounded-full bg-primary"
+                  style={{
+                    width: `${Math.min(overallRatio * 100, 100)}%`
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {overallBudget.limit_cents - overallSpent >= 0
+                  ? `${Math.round(overallRatio * 100)}% used`
+                  : "Over budget"}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Set a general budget to track total monthly spend.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {alertBudgets.length > 0 ? (
-        <Card>
+        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
           <CardHeader>
             <CardTitle className="text-sm text-muted-foreground">Budget alerts</CardTitle>
           </CardHeader>
@@ -259,7 +373,7 @@ export default function BudgetsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {isLoading
           ? Array.from({ length: 4 }).map((_, index) => (
-              <Card key={`budget-skeleton-${index}`}>
+              <Card key={`budget-skeleton-${index}`} className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10">
                 <CardHeader className="space-y-2">
                   <Skeleton className="h-5 w-32" />
                   <Skeleton className="h-4 w-44" />
@@ -275,7 +389,10 @@ export default function BudgetsPage() {
                 ? budget.spent / budget.effectiveLimit
                 : 0;
               return (
-                <Card key={budget.id}>
+                <Card
+                  key={budget.id}
+                  className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10"
+                >
                   <CardHeader className="flex flex-row items-start justify-between">
                     <div>
                       <CardTitle>{budget.categoryName}</CardTitle>

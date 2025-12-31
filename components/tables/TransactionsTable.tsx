@@ -170,7 +170,11 @@ export function TransactionsTable() {
   const handleDelete = async (id: string) => {
     try {
       await deleteTransaction(id);
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
       toast.success("Transaction deleted");
     } catch (error) {
       console.error(error);
@@ -182,7 +186,11 @@ export function TransactionsTable() {
     try {
       await bulkDeleteTransactions(selectedIds);
       setSelectedIds([]);
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
       toast.success("Transactions deleted");
     } catch (error) {
       console.error(error);

@@ -104,8 +104,12 @@ export function RecurringTransactionsTable() {
         last_run: today,
         next_run: nextRun
       });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["recurring_transactions"], exact: false });
       toast.success("Recurring transaction created");
     } catch (error) {
       console.error(error);

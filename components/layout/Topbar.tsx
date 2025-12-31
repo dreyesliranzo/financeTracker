@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
+  { href: "/recurring", label: "Recurring" },
   { href: "/budgets", label: "Budgets" },
   { href: "/goals", label: "Goals" },
   { href: "/insights", label: "Insights" },
@@ -35,6 +36,7 @@ const navItems = [
 const titleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/transactions": "Transactions",
+  "/recurring": "Recurring",
   "/budgets": "Budgets",
   "/goals": "Goals",
   "/insights": "Insights",
@@ -43,11 +45,17 @@ const titleMap: Record<string, string> = {
 
 export function Topbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
   const basePath = `/${pathname.split("/")[1] || "dashboard"}`;
   const title = titleMap[basePath] ?? "Dashboard";
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-4 backdrop-blur lg:px-10">
@@ -116,7 +124,7 @@ export function Topbar() {
               {user?.email ?? "Signed in"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
+            <DropdownMenuItem onClick={handleSignOut}>
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

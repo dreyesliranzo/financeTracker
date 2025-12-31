@@ -25,6 +25,7 @@ const TABLES = [
   "accounts",
   "categories",
   "budgets",
+  "overall_budgets",
   "recurring_transactions",
   "goals"
 ] as const;
@@ -57,7 +58,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: [table] });
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === table
+          });
         }
       );
     });

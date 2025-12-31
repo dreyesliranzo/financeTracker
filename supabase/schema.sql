@@ -44,6 +44,16 @@ create table if not exists budgets (
   created_at timestamptz not null default now()
 );
 
+create table if not exists overall_budgets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  month date not null,
+  limit_cents int not null,
+  currency_code text not null default 'USD',
+  created_at timestamptz not null default now(),
+  unique (user_id, month, currency_code)
+);
+
 create table if not exists profiles (
   user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   full_name text,

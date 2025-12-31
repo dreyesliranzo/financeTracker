@@ -73,6 +73,15 @@ export const budgetSchema = z.object({
   created_at: z.string().optional()
 });
 
+export const overallBudgetSchema = z.object({
+  id: z.string().uuid().optional(),
+  user_id: z.string().uuid().optional(),
+  month: z.string().min(1, "Month is required"),
+  limit_cents: z.number().int(),
+  currency_code: currencySchema.default("USD"),
+  created_at: z.string().optional()
+});
+
 export const profileSchema = z.object({
   user_id: z.string().uuid(),
   full_name: z.string().optional(),
@@ -132,6 +141,12 @@ export const budgetFormSchema = z.object({
   currency_code: currencySchema.default("USD")
 });
 
+export const overallBudgetFormSchema = z.object({
+  month: z.string().min(1, "Month is required"),
+  limit: z.string().min(1, "Limit is required"),
+  currency_code: currencySchema.default("USD")
+});
+
 export const recurringFormSchema = z.object({
   name: z.string().optional(),
   amount: z.string().min(1, "Amount is required"),
@@ -160,10 +175,12 @@ export type Account = z.infer<typeof accountSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type Transaction = z.infer<typeof transactionSchema>;
 export type Budget = z.infer<typeof budgetSchema>;
+export type OverallBudget = z.infer<typeof overallBudgetSchema>;
 export type Profile = z.infer<typeof profileSchema>;
 export type RecurringTransaction = z.infer<typeof recurringTransactionSchema>;
 export type Goal = z.infer<typeof goalSchema>;
 export type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 export type BudgetFormValues = z.infer<typeof budgetFormSchema>;
+export type OverallBudgetFormValues = z.infer<typeof overallBudgetFormSchema>;
 export type RecurringFormValues = z.infer<typeof recurringFormSchema>;
 export type GoalFormValues = z.infer<typeof goalFormSchema>;

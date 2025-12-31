@@ -108,8 +108,8 @@ export function TransactionForm({
       date: values.date,
       amount_cents: Math.abs(parseCurrencyToCents(values.amount)),
       type: values.type,
-      category_id: values.category_id,
-      account_id: values.account_id,
+      category_id: values.category_id || null,
+      account_id: values.account_id || null,
       currency_code: values.currency_code,
       merchant: values.merchant?.trim() || null,
       notes: values.notes?.trim() || null,
@@ -129,8 +129,11 @@ export function TransactionForm({
         await createTransaction(user.id, payload);
         toast.success("Transaction added");
       }
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["insights"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
       form.reset(defaultValues);
       onSuccess?.();
     } catch (error) {

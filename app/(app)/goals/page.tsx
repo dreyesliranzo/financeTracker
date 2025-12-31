@@ -6,20 +6,23 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GoalForm } from "@/components/forms/GoalForm";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { currencyOptions } from "@/lib/money/currencies";
-import { formatCurrency } from "@/lib/money";
+import { formatCurrency, parseCurrencyToCents } from "@/lib/money";
 import { fetchGoals, fetchProfile } from "@/lib/supabase/queries";
-import { deleteGoal } from "@/lib/supabase/mutations";
+import { deleteGoal, updateGoal } from "@/lib/supabase/mutations";
 
 export default function GoalsPage() {
   const queryClient = useQueryClient();
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const didSelectCurrency = useRef(false);
+  const [progressGoal, setProgressGoal] = useState<null | { id: string; name: string; current: number }>(null);
+  const [progressAmount, setProgressAmount] = useState("");
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -49,6 +52,28 @@ export default function GoalsPage() {
     } catch (error) {
       console.error(error);
       toast.error("Unable to delete goal");
+    }
+  };
+
+  const handleAddProgress = async () => {
+    if (!progressGoal) return;
+    const amountCents = Math.abs(parseCurrencyToCents(progressAmount));
+    if (!amountCents) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+
+    try {
+      await updateGoal(progressGoal.id, {
+        current_cents: progressGoal.current + amountCents
+      });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      toast.success("Progress added");
+      setProgressAmount("");
+      setProgressGoal(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to update goal");
     }
   };
 
@@ -138,6 +163,19 @@ export default function GoalsPage() {
                         <GoalForm goal={goal} />
                       </DialogContent>
                     </Dialog>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setProgressGoal({
+                          id: goal.id!,
+                          name: goal.name,
+                          current: goal.current_cents
+                        })
+                      }
+                    >
+                      Add progress
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="sm">
@@ -172,11 +210,35 @@ export default function GoalsPage() {
                     {ratio >= 1 ? "Goal reached" : `${Math.round(ratio * 100)}% saved`}
                   </p>
                 </CardContent>
-              </Card>
-            );
-          })}
+            </Card>
+          );
+        })}
+      </div>
+    )}
+
+    <Dialog
+      open={Boolean(progressGoal)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setProgressGoal(null);
+          setProgressAmount("");
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add to {progressGoal?.name ?? "goal"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input
+            value={progressAmount}
+            onChange={(event) => setProgressAmount(event.target.value)}
+            placeholder="Amount"
+          />
+          <Button onClick={handleAddProgress}>Add progress</Button>
         </div>
-      )}
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }

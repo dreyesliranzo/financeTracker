@@ -5,11 +5,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { budgetFormSchema, type Budget, type BudgetFormValues } from "@/types";
+import {
+  overallBudgetFormSchema,
+  type OverallBudget,
+  type OverallBudgetFormValues
+} from "@/types";
 import { parseCurrencyToCents } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { fetchCategories, fetchProfile } from "@/lib/supabase/queries";
-import { createBudget, updateBudget } from "@/lib/supabase/mutations";
+import { fetchProfile } from "@/lib/supabase/queries";
+import { createOverallBudget, updateOverallBudget } from "@/lib/supabase/mutations";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,30 +21,25 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-export function BudgetForm({
+export function OverallBudgetForm({
   budget,
   onSuccess
 }: {
-  budget?: Budget;
+  budget?: OverallBudget | null;
   onSuccess?: () => void;
 }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { data: categories = [] } = useQuery({
-    queryKey: ["categories"],
-    queryFn: fetchCategories
-  });
   const { data: profile } = useQuery({
     queryKey: ["profile"],
     queryFn: fetchProfile
   });
   const defaultCurrency = profile?.default_currency ?? "USD";
 
-  const defaultValues = useMemo<BudgetFormValues>(() => {
+  const defaultValues = useMemo<OverallBudgetFormValues>(() => {
     if (!budget) {
       return {
         month: new Date().toISOString().slice(0, 7),
-        category_id: "",
         limit: "",
         currency_code: defaultCurrency
       };
@@ -48,14 +47,13 @@ export function BudgetForm({
 
     return {
       month: budget.month.slice(0, 7),
-      category_id: budget.category_id,
       limit: (budget.limit_cents / 100).toFixed(2),
       currency_code: budget.currency_code ?? "USD"
     };
   }, [budget, defaultCurrency]);
 
-  const form = useForm<BudgetFormValues>({
-    resolver: zodResolver(budgetFormSchema),
+  const form = useForm<OverallBudgetFormValues>({
+    resolver: zodResolver(overallBudgetFormSchema),
     defaultValues
   });
 
@@ -68,34 +66,33 @@ export function BudgetForm({
 
     const payload = {
       month: `${values.month}-01`,
-      category_id: values.category_id,
       limit_cents: Math.abs(parseCurrencyToCents(values.limit)),
       currency_code: values.currency_code
     };
 
     try {
       if (budget?.id) {
-        await updateBudget(budget.id, payload);
-        toast.success("Budget updated");
+        await updateOverallBudget(budget.id, payload);
+        toast.success("General budget updated");
       } else {
-        await createBudget(user.id, payload);
-        toast.success("Budget created");
+        await createOverallBudget(user.id, payload);
+        toast.success("General budget created");
       }
-      queryClient.invalidateQueries({ queryKey: ["budgets"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["overall_budgets"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: false });
       onSuccess?.();
     } catch (error) {
       console.error(error);
-      toast.error("Unable to save budget");
+      toast.error("Unable to save general budget");
     }
   });
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <DialogHeader>
-        <DialogTitle>{budget ? "Edit budget" : "Create budget"}</DialogTitle>
+        <DialogTitle>{budget ? "Edit general budget" : "Create general budget"}</DialogTitle>
         <DialogDescription>
-          Set monthly caps for expenses by category.
+          Track a single monthly spending cap across categories.
         </DialogDescription>
       </DialogHeader>
 
@@ -103,26 +100,6 @@ export function BudgetForm({
         <div className="space-y-2">
           <Label htmlFor="month">Month</Label>
           <Input id="month" type="month" {...form.register("month")} />
-        </div>
-        <div className="space-y-2">
-          <Label>Category</Label>
-          <Select
-            value={form.watch("category_id")}
-            onValueChange={(value) => form.setValue("category_id", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories
-                .filter((category) => category.type === "expense")
-                .map((category) => (
-                  <SelectItem key={category.id!} value={category.id!}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="limit">Limit</Label>
@@ -133,7 +110,10 @@ export function BudgetForm({
           <Select
             value={form.watch("currency_code")}
             onValueChange={(value) =>
-              form.setValue("currency_code", value as BudgetFormValues["currency_code"])
+              form.setValue(
+                "currency_code",
+                value as OverallBudgetFormValues["currency_code"]
+              )
             }
           >
             <SelectTrigger>
@@ -151,7 +131,9 @@ export function BudgetForm({
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit">{budget ? "Save budget" : "Create budget"}</Button>
+        <Button type="submit">
+          {budget ? "Save budget" : "Create general budget"}
+        </Button>
       </div>
     </form>
   );

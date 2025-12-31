@@ -4,6 +4,7 @@ import type {
   Budget,
   Category,
   Goal,
+  OverallBudget,
   Profile,
   RecurringTransaction,
   Transaction
@@ -154,6 +155,43 @@ export async function updateBudget(
 
 export async function deleteBudget(id: string) {
   const { error } = await supabaseBrowser().from("budgets").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function createOverallBudget(
+  userId: string,
+  values: Omit<OverallBudget, "id" | "user_id" | "created_at">
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("overall_budgets")
+    .insert({ ...values, user_id: userId })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as OverallBudget;
+}
+
+export async function updateOverallBudget(
+  id: string,
+  values: Partial<Omit<OverallBudget, "id" | "user_id" | "created_at">>
+) {
+  const { data, error } = await supabaseBrowser()
+    .from("overall_budgets")
+    .update(values)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as OverallBudget;
+}
+
+export async function deleteOverallBudget(id: string) {
+  const { error } = await supabaseBrowser()
+    .from("overall_budgets")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
