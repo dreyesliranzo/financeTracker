@@ -43,7 +43,7 @@ export function AdvisorChat() {
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions", "summary", rangeStart, rangeEnd, currency],
     queryFn: () =>
-      fetchTransactionsSummary({ start: rangeStart, end: rangeEnd }, currency, true)
+      fetchTransactionsSummary({ start: rangeStart, end: rangeEnd }, currency)
   });
 
   const { data: categories = [] } = useQuery({

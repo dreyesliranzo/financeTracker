@@ -73,12 +73,10 @@ export async function fetchTransactions(range?: DateRange, currencyCode?: string
 
 export async function fetchTransactionsSummary(
   range?: DateRange,
-  currencyCode?: string,
-  includeMerchant = false
+  currencyCode?: string
 ) {
-  const fields = includeMerchant
-    ? "id,date,amount_cents,type,category_id,account_id,currency_code,merchant"
-    : "id,date,amount_cents,type,category_id,account_id,currency_code";
+  const fields =
+    "id,date,amount_cents,type,category_id,account_id,currency_code,merchant" as const;
 
   let query = supabaseBrowser()
     .from("transactions")
@@ -108,13 +106,18 @@ export async function fetchTransactionsPage(
     filters?: TransactionFilters;
     page: number;
     pageSize: number;
+    sortKey?: "date" | "amount";
   }
 ) {
-  const { range, filters, page, pageSize } = options;
+  const { range, filters, page, pageSize, sortKey = "date" } = options;
+  const orderKey = sortKey === "amount" ? "amount_cents" : "date";
   let query = supabaseBrowser()
     .from("transactions")
-    .select("*", { count: "exact" })
-    .order("date", { ascending: false });
+    .select(
+      "id,date,amount_cents,type,category_id,account_id,currency_code,merchant",
+      { count: "exact" }
+    )
+    .order(orderKey, { ascending: false });
 
   if (range?.start) {
     query = query.gte("date", range.start);

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -15,7 +16,11 @@ export type SavingsPoint = {
   total: number;
 };
 
-export function SavingsProjectionChart({ data }: { data: SavingsPoint[] }) {
+export const SavingsProjectionChart = memo(function SavingsProjectionChart({
+  data
+}: {
+  data: SavingsPoint[];
+}) {
   return (
     <div className="h-56">
       <ResponsiveContainer width="100%" height="100%">
@@ -60,9 +65,10 @@ export function SavingsProjectionChart({ data }: { data: SavingsPoint[] }) {
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
-}
+});

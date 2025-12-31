@@ -44,8 +44,7 @@ export default function InsightsPage() {
     queryFn: () =>
       fetchTransactionsSummary(
         { start: previousStart, end: rangeEnd },
-        selectedCurrency,
-        true
+        selectedCurrency
       )
   });
 

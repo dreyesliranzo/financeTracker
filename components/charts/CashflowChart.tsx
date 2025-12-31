@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -16,7 +17,11 @@ export type CashflowPoint = {
   expense: number;
 };
 
-export function CashflowChart({ data }: { data: CashflowPoint[] }) {
+export const CashflowChart = memo(function CashflowChart({
+  data
+}: {
+  data: CashflowPoint[];
+}) {
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -65,6 +70,7 @@ export function CashflowChart({ data }: { data: CashflowPoint[] }) {
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -73,9 +79,10 @@ export function CashflowChart({ data }: { data: CashflowPoint[] }) {
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
-}
+});

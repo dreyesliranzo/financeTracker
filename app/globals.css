@@ -108,7 +108,7 @@
     @apply bg-background text-foreground antialiased min-h-screen;
     background-image: radial-gradient(1200px 600px at 20% 0%, rgb(var(--bg-glow-1) / 0.14), transparent),
       radial-gradient(800px 400px at 80% 20%, rgb(var(--bg-glow-2) / 0.12), transparent);
-    background-attachment: fixed;
+    background-attachment: scroll;
   }
 
   h1, h2, h3, h4 {
@@ -292,5 +292,11 @@
   .success-overlay-card {
     animation: none;
     transition: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    background-attachment: fixed;
   }
 }

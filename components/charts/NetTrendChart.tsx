@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -15,7 +16,11 @@ export type NetTrendPoint = {
   net: number;
 };
 
-export function NetTrendChart({ data }: { data: NetTrendPoint[] }) {
+export const NetTrendChart = memo(function NetTrendChart({
+  data
+}: {
+  data: NetTrendPoint[];
+}) {
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -60,9 +65,10 @@ export function NetTrendChart({ data }: { data: NetTrendPoint[] }) {
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
-}
+});

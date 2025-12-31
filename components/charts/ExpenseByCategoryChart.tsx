@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   Bar,
   BarChart,
@@ -15,7 +16,11 @@ export type CategorySpend = {
   value: number;
 };
 
-export function ExpenseByCategoryChart({ data }: { data: CategorySpend[] }) {
+export const ExpenseByCategoryChart = memo(function ExpenseByCategoryChart({
+  data
+}: {
+  data: CategorySpend[];
+}) {
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -53,9 +58,14 @@ export function ExpenseByCategoryChart({ data }: { data: CategorySpend[] }) {
               color: "#e2e8f0"
             }}
           />
-          <Bar dataKey="value" fill="url(#categoryBar)" radius={[6, 6, 0, 0]} />
+          <Bar
+            dataKey="value"
+            fill="url(#categoryBar)"
+            radius={[6, 6, 0, 0]}
+            isAnimationActive={false}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
-}
+});

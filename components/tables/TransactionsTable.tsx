@@ -59,7 +59,8 @@ export function TransactionsTable() {
       accountFilter,
       deferredSearch,
       page,
-      pageSize
+      pageSize,
+      sortKey
     ],
     queryFn: () =>
       fetchTransactionsPage({
@@ -75,7 +76,8 @@ export function TransactionsTable() {
           search: deferredSearch.trim().length > 0 ? deferredSearch : undefined
         },
         page,
-        pageSize
+        pageSize,
+        sortKey: sortKey as "date" | "amount"
       }),
     placeholderData: (previous) => previous
   });
@@ -113,27 +115,10 @@ export function TransactionsTable() {
     );
   }, [accounts]);
 
-  const filtered = useMemo(() => {
-    let rows = transactions;
-    if (deferredSearch.trim().length > 0) {
-      const query = deferredSearch.toLowerCase();
-      rows = rows.filter((transaction) => {
-        const matchMerchant = transaction.merchant?.toLowerCase().includes(query);
-        const matchNotes = transaction.notes?.toLowerCase().includes(query);
-        const matchTags = transaction.tags?.some((tag) => tag.toLowerCase().includes(query));
-        return Boolean(matchMerchant || matchNotes || matchTags);
-      });
-    }
-    return [...rows].sort((a, b) => {
-      if (sortKey === "amount") {
-        return b.amount_cents - a.amount_cents;
-      }
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-  }, [transactions, deferredSearch, sortKey]);
+  const rows = useMemo(() => transactions, [transactions]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const paged = filtered;
+  const paged = rows;
 
   const skeletonRows = useMemo(() => Array.from({ length: 6 }, (_, index) => index), []);
 
@@ -148,17 +133,11 @@ export function TransactionsTable() {
   }, [currencyFilter, profile]);
 
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
+    if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
   const toggleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(paged.map((item) => item.id!).filter(Boolean));
-    } else {
-      setSelectedIds([]);
-    }
+    setSelectedIds(checked ? paged.map((item) => item.id!).filter(Boolean) : []);
   };
 
   const toggleSelect = (id: string, checked: boolean) => {
@@ -226,7 +205,7 @@ export function TransactionsTable() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-1 flex-wrap gap-2">
           <Input
-            placeholder="Search merchant, notes, tags"
+            placeholder="Search merchant or notes"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="min-w-[220px]"
@@ -344,9 +323,7 @@ export function TransactionsTable() {
             <TableRow>
               <TableHead className="w-10">
                 <Checkbox
-                  checked={
-                    filtered.length > 0 && selectedIds.length === filtered.length
-                  }
+                  checked={rows.length > 0 && selectedIds.length === rows.length}
                   onCheckedChange={(value) => toggleSelectAll(Boolean(value))}
                 />
               </TableHead>
