@@ -293,7 +293,7 @@ export function TransactionForm({
             <div className="space-y-2">
               <Label>From account</Label>
               <Select
-                value={form.watch("from_account_id")}
+                value={form.watch("from_account_id") ?? ""}
                 onValueChange={(value) => form.setValue("from_account_id", value)}
               >
                 <SelectTrigger>
@@ -316,7 +316,7 @@ export function TransactionForm({
             <div className="space-y-2">
               <Label>To account</Label>
               <Select
-                value={form.watch("to_account_id")}
+                value={form.watch("to_account_id") ?? ""}
                 onValueChange={(value) => form.setValue("to_account_id", value)}
               >
                 <SelectTrigger>

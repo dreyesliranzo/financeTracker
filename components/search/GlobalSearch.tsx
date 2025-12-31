@@ -105,7 +105,7 @@ export function GlobalSearch() {
                       <span className="font-medium">
                         {formatSignedCurrency(
                           transaction.amount_cents,
-                          transaction.type,
+                          (transaction.transaction_kind ?? transaction.type) === "income" ? "income" : "expense",
                           transaction.currency_code ?? "USD"
                         )}
                       </span>
