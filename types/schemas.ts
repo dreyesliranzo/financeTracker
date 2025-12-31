@@ -8,6 +8,7 @@ export const accountTypeSchema = z.enum([
   "investment",
   "other"
 ]);
+export const accountClassSchema = z.enum(["asset", "liability"]);
 
 export const categoryTypeSchema = z.enum(["income", "expense"]);
 export const transactionKindSchema = z.enum(["income", "expense", "transfer"]);
@@ -35,6 +36,7 @@ export const accountSchema = z.object({
   user_id: z.string().uuid().optional(),
   name: z.string().min(1, "Account name is required"),
   type: accountTypeSchema,
+  account_class: accountClassSchema.default("asset"),
   currency_code: currencySchema.default("USD"),
   created_at: z.string().optional()
 });

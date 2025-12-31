@@ -5,6 +5,7 @@ create table if not exists accounts (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null,
   type text not null check (type in ('checking', 'savings', 'credit', 'cash', 'investment', 'other')),
+  account_class text not null default 'asset' check (account_class in ('asset', 'liability')),
   currency_code text not null default 'USD',
   created_at timestamptz not null default now()
 );
@@ -191,6 +192,9 @@ execute function set_updated_at();
 
 alter table accounts
   add column if not exists currency_code text not null default 'USD';
+
+alter table accounts
+  add column if not exists account_class text not null default 'asset';
 
 alter table transactions
   add column if not exists currency_code text not null default 'USD';

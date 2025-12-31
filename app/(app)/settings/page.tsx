@@ -270,6 +270,7 @@ export default function SettingsPage() {
         const created = await createAccount(user.id, {
           name,
           type: "checking",
+          account_class: "asset",
           currency_code: defaultCurrency
         });
         accountMap.set(key, created.id!);

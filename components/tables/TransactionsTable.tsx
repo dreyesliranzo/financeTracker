@@ -55,6 +55,11 @@ export function TransactionsTable() {
   const deferredSearch = useDeferredValue(search);
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search");
+  const urlCategory = searchParams.get("category");
+  const urlType = searchParams.get("type");
+  const urlAccount = searchParams.get("account");
+  const urlStart = searchParams.get("start");
+  const urlEnd = searchParams.get("end");
   const tableRef = useRef<HTMLTableElement>(null);
   const pageSize = 50;
   const hasFilters =
@@ -160,6 +165,36 @@ export function TransactionsTable() {
     if (!urlSearch) return;
     setSearch((current) => (current ? current : urlSearch));
   }, [urlSearch]);
+
+  useEffect(() => {
+    if (urlCategory && categoryFilter === "all") {
+      setCategoryFilter(urlCategory);
+    }
+  }, [categoryFilter, urlCategory]);
+
+  useEffect(() => {
+    if (urlType && typeFilter === "all") {
+      setTypeFilter(urlType);
+    }
+  }, [typeFilter, urlType]);
+
+  useEffect(() => {
+    if (urlAccount && accountFilter === "all") {
+      setAccountFilter(urlAccount);
+    }
+  }, [accountFilter, urlAccount]);
+
+  useEffect(() => {
+    if (urlStart && !startDate) {
+      setStartDate(urlStart);
+    }
+  }, [startDate, urlStart]);
+
+  useEffect(() => {
+    if (urlEnd && !endDate) {
+      setEndDate(urlEnd);
+    }
+  }, [endDate, urlEnd]);
 
   useEffect(() => {
     if (profile?.default_currency && currencyFilter === "all") {

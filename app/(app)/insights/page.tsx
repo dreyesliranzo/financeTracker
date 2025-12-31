@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
+import {
+  addDays,
+  differenceInCalendarDays,
+  endOfMonth,
+  format,
+  getDaysInMonth,
+  parseISO,
+  startOfMonth,
+  subDays
+} from "date-fns";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,10 +22,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingText } from "@/components/ui/LoadingText";
-import { fetchCategories, fetchProfile, fetchTransactionsSummary } from "@/lib/supabase/queries";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  fetchAccounts,
+  fetchBudgets,
+  fetchCategories,
+  fetchOverallBudgets,
+  fetchProfile,
+  fetchRecurringTransactions,
+  fetchTransactionsSummary
+} from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
-import { categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
+import { categoryTotals, flattenSplits, sumIncomeExpense, type TransactionWithSplits } from "@/lib/utils/transactions";
 
 const ChartFallback = () => (
   <div className="space-y-3">
@@ -31,7 +52,16 @@ const NetTrendChart = dynamic(
   }
 );
 
+const NetWorthChart = dynamic(
+  () => import("@/components/charts/NetWorthChart").then((mod) => mod.NetWorthChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback />
+  }
+);
+
 export default function InsightsPage() {
+  const router = useRouter();
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const didSelectCurrency = useRef(false);
   const [rangeStart, setRangeStart] = useState(
@@ -40,6 +70,13 @@ export default function InsightsPage() {
   const [rangeEnd, setRangeEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const cardHover = "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10";
+  const today = new Date();
+  const currentMonthStart = format(startOfMonth(today), "yyyy-MM-dd");
+  const currentMonthEnd = format(endOfMonth(today), "yyyy-MM-dd");
+  const analysisStart = format(subDays(today, 60), "yyyy-MM-dd");
+  const duplicateStart = format(subDays(today, 30), "yyyy-MM-dd");
+  const netWorthStart = format(subDays(today, 90), "yyyy-MM-dd");
+  const daysInMonth = getDaysInMonth(today);
 
   const rangeStartDate = parseISO(rangeStart);
   const rangeEndDate = parseISO(rangeEnd);
@@ -73,13 +110,83 @@ export default function InsightsPage() {
   });
   const categories = categoriesQuery.data ?? [];
 
-  const isLoading = transactionsQuery.isLoading || categoriesQuery.isLoading;
+  const accountsQuery = useQuery({
+    queryKey: ["accounts"],
+    queryFn: fetchAccounts
+  });
+  const accounts = accountsQuery.data ?? [];
+
+  const budgetsQuery = useQuery({
+    queryKey: ["budgets", currentMonthStart, selectedCurrency],
+    queryFn: () => fetchBudgets(`${format(today, "yyyy-MM")}-01`, selectedCurrency)
+  });
+  const budgets = budgetsQuery.data ?? [];
+
+  const overallBudgetsQuery = useQuery({
+    queryKey: ["overall_budgets", currentMonthStart, selectedCurrency],
+    queryFn: () => fetchOverallBudgets(`${format(today, "yyyy-MM")}-01`, selectedCurrency)
+  });
+  const overallBudget = overallBudgetsQuery.data?.[0] ?? null;
+
+  const recurringQuery = useQuery({
+    queryKey: ["recurring_transactions"],
+    queryFn: fetchRecurringTransactions
+  });
+  const recurring = recurringQuery.data ?? [];
+
+  const monthTransactionsQuery = useQuery({
+    queryKey: ["transactions", currentMonthStart, currentMonthEnd, selectedCurrency, "month"],
+    queryFn: () =>
+      fetchTransactionsSummary(
+        { start: currentMonthStart, end: currentMonthEnd },
+        selectedCurrency
+      )
+  });
+  const monthTransactions = (monthTransactionsQuery.data ?? []) as TransactionWithSplits[];
+
+  const analysisTransactionsQuery = useQuery({
+    queryKey: ["transactions", analysisStart, currentMonthEnd, selectedCurrency, "analysis"],
+    queryFn: () =>
+      fetchTransactionsSummary(
+        { start: analysisStart, end: currentMonthEnd },
+        selectedCurrency
+      )
+  });
+  const analysisTransactions = (analysisTransactionsQuery.data ?? []) as TransactionWithSplits[];
+
+  const allTransactionsQuery = useQuery({
+    queryKey: ["transactions", "all", selectedCurrency],
+    queryFn: () => fetchTransactionsSummary(undefined, selectedCurrency),
+    staleTime: 5 * 60_000
+  });
+  const allTransactions = (allTransactionsQuery.data ?? []) as TransactionWithSplits[];
+
+  const isLoading =
+    transactionsQuery.isLoading ||
+    categoriesQuery.isLoading ||
+    accountsQuery.isLoading ||
+    budgetsQuery.isLoading ||
+    overallBudgetsQuery.isLoading ||
+    recurringQuery.isLoading ||
+    monthTransactionsQuery.isLoading ||
+    analysisTransactionsQuery.isLoading ||
+    allTransactionsQuery.isLoading;
 
   useEffect(() => {
     if (!profile?.default_currency) return;
     if (didSelectCurrency.current) return;
     setSelectedCurrency(profile.default_currency);
   }, [profile?.default_currency]);
+
+  const navigateToTransactions = (params: Record<string, string | undefined>) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) query.set(key, value);
+    });
+    const queryString = query.toString();
+    const href = queryString ? `/transactions?${queryString}` : "/transactions";
+    router.push(href as Route);
+  };
 
   const categoryNameMap = useMemo(() => {
     return new Map(
@@ -207,6 +314,262 @@ export default function InsightsPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [current, selectedCategory]);
 
+  const accountBalances = useMemo(() => {
+    const balances = new Map<string, number>();
+    accounts.forEach((account) => {
+      if (!account.id) return;
+      if (account.currency_code && account.currency_code !== selectedCurrency) return;
+      balances.set(account.id, 0);
+    });
+
+    const applyDelta = (accountId: string | null | undefined, delta: number) => {
+      if (!accountId) return;
+      if (!balances.has(accountId)) return;
+      balances.set(accountId, (balances.get(accountId) ?? 0) + delta);
+    };
+
+    allTransactions.forEach((transaction) => {
+      const kind = transaction.transaction_kind ?? transaction.type;
+      if (kind === "transfer") {
+        applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
+        applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
+        return;
+      }
+      const sign = kind === "income" ? 1 : -1;
+      applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
+    });
+
+    return balances;
+  }, [accounts, allTransactions, selectedCurrency]);
+
+  const accountSummary = useMemo(() => {
+    let assets = 0;
+    let liabilities = 0;
+
+    accounts.forEach((account) => {
+      if (!account.id) return;
+      if (account.currency_code && account.currency_code !== selectedCurrency) return;
+      const balance = accountBalances.get(account.id) ?? 0;
+      const accountClass =
+        account.account_class ?? (account.type === "credit" ? "liability" : "asset");
+      if (accountClass === "liability") {
+        liabilities += balance;
+      } else {
+        assets += balance;
+      }
+    });
+
+    return {
+      assets,
+      liabilities,
+      total: assets + liabilities
+    };
+  }, [accountBalances, accounts, selectedCurrency]);
+
+  const monthTotals = useMemo(() => {
+    return sumIncomeExpense(monthTransactions);
+  }, [monthTransactions]);
+
+  const upcomingRecurring = useMemo(() => {
+    const todayStr = format(today, "yyyy-MM-dd");
+    return recurring.filter(
+      (item) =>
+        item.active &&
+        item.next_run &&
+        item.next_run >= todayStr &&
+        item.next_run <= currentMonthEnd
+    );
+  }, [currentMonthEnd, recurring, today]);
+
+  const upcomingNet = useMemo(() => {
+    return upcomingRecurring.reduce((sum, item) => {
+      const delta = item.type === "income" ? item.amount_cents : -item.amount_cents;
+      return sum + delta;
+    }, 0);
+  }, [upcomingRecurring]);
+
+  const budgetLimit = useMemo(() => {
+    if (overallBudget?.limit_cents) return overallBudget.limit_cents;
+    return budgets.reduce((sum, budget) => sum + budget.limit_cents, 0);
+  }, [budgets, overallBudget]);
+
+  const elapsedDays = Math.max(
+    1,
+    differenceInCalendarDays(today, startOfMonth(today)) + 1
+  );
+  const remainingDays = Math.max(
+    1,
+    differenceInCalendarDays(endOfMonth(today), today) + 1
+  );
+  const paceLimit = budgetLimit ? budgetLimit * (elapsedDays / daysInMonth) : 0;
+  const overspend = Math.max(0, monthTotals.expense - paceLimit);
+
+  const safeToSpend = useMemo(() => {
+    const safeThisMonth = accountSummary.total + upcomingNet - overspend;
+    const safeToday = safeThisMonth / remainingDays;
+    const paceRatio = paceLimit ? monthTotals.expense / paceLimit : 0;
+    return {
+      safeThisMonth,
+      safeToday,
+      paceRatio
+    };
+  }, [accountSummary.total, upcomingNet, overspend, remainingDays, paceLimit, monthTotals.expense]);
+
+  const forecast = useMemo(() => {
+    const netToDate = monthTotals.net;
+    const dailyNet = netToDate / elapsedDays;
+    const projectedNet = netToDate + dailyNet * (daysInMonth - elapsedDays) + upcomingNet;
+    return {
+      netToDate,
+      dailyNet,
+      projectedNet
+    };
+  }, [daysInMonth, elapsedDays, monthTotals.net, upcomingNet]);
+
+  const anomalies = useMemo(() => {
+    const recentStart = format(subDays(today, 7), "yyyy-MM-dd");
+    const baselineStart = format(subDays(today, 37), "yyyy-MM-dd");
+    const baselineEnd = format(subDays(today, 8), "yyyy-MM-dd");
+    const recentTransactions = analysisTransactions.filter(
+      (transaction) => transaction.date >= recentStart && transaction.date <= currentMonthEnd
+    );
+    const baselineTransactions = analysisTransactions.filter(
+      (transaction) =>
+        transaction.date >= baselineStart && transaction.date <= baselineEnd
+    );
+
+    const recentTotals = categoryTotals(recentTransactions);
+    const baselineTotals = categoryTotals(baselineTransactions);
+    const anomaliesList = Object.entries(recentTotals)
+      .map(([categoryId, recentTotal]) => {
+        const baselineTotal = baselineTotals[categoryId] ?? 0;
+        const baselineWeekly = baselineTotal ? (baselineTotal / 30) * 7 : 0;
+        const ratio = baselineWeekly ? recentTotal / baselineWeekly : recentTotal > 0 ? 999 : 0;
+        return {
+          categoryId,
+          category: categoryNameMap.get(categoryId) ?? "Uncategorized",
+          recentTotal,
+          baselineWeekly,
+          ratio
+        };
+      })
+      .filter((item) => {
+        const threshold = Math.max(5000, item.baselineWeekly * 1.6);
+        return item.recentTotal >= threshold;
+      })
+      .sort((a, b) => b.ratio - a.ratio)
+      .slice(0, 5);
+
+    return anomaliesList;
+  }, [analysisTransactions, categoryNameMap, currentMonthEnd, today]);
+
+  const duplicates = useMemo(() => {
+    const recentTransactions = analysisTransactions.filter(
+      (transaction) => transaction.date >= duplicateStart
+    );
+    const groups = new Map<string, TransactionWithSplits[]>();
+
+    recentTransactions.forEach((transaction) => {
+      const kind = transaction.transaction_kind ?? transaction.type;
+      if (kind !== "expense") return;
+      if (!transaction.merchant) return;
+      const key = `${transaction.merchant.toLowerCase()}-${transaction.amount_cents}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(transaction);
+    });
+
+    const results: Array<{
+      merchant: string;
+      amount: number;
+      date: string;
+      matchDate: string;
+      daysApart: number;
+    }> = [];
+
+    groups.forEach((items) => {
+      items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      for (let i = 1; i < items.length; i += 1) {
+        const prev = items[i - 1];
+        const current = items[i];
+        const daysApart = Math.abs(
+          differenceInCalendarDays(parseISO(current.date), parseISO(prev.date))
+        );
+        if (daysApart <= 2) {
+          results.push({
+            merchant: current.merchant ?? "Unknown",
+            amount: current.amount_cents,
+            date: prev.date,
+            matchDate: current.date,
+            daysApart
+          });
+        }
+      }
+    });
+
+    return results.slice(0, 5);
+  }, [analysisTransactions, duplicateStart]);
+
+  const netWorthTrend = useMemo(() => {
+    const startDate = parseISO(netWorthStart);
+    const endDate = today;
+    const balances = new Map<string, number>();
+
+    accounts.forEach((account) => {
+      if (!account.id) return;
+      if (account.currency_code && account.currency_code !== selectedCurrency) return;
+      balances.set(account.id, 0);
+    });
+
+    const applyDelta = (accountId: string | null | undefined, delta: number) => {
+      if (!accountId) return;
+      if (!balances.has(accountId)) return;
+      balances.set(accountId, (balances.get(accountId) ?? 0) + delta);
+    };
+
+    const byDate = new Map<string, TransactionWithSplits[]>();
+
+    allTransactions.forEach((transaction) => {
+      const kind = transaction.transaction_kind ?? transaction.type;
+      if (transaction.date < netWorthStart) {
+        if (kind === "transfer") {
+          applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
+          applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
+        } else {
+          const sign = kind === "income" ? 1 : -1;
+          applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
+        }
+        return;
+      }
+
+      if (transaction.date > format(endDate, "yyyy-MM-dd")) return;
+      if (!byDate.has(transaction.date)) byDate.set(transaction.date, []);
+      byDate.get(transaction.date)!.push(transaction);
+    });
+
+    const points: Array<{ date: string; balance: number }> = [];
+    let cursor = startDate;
+    while (cursor <= endDate) {
+      const dateKey = format(cursor, "yyyy-MM-dd");
+      const daily = byDate.get(dateKey) ?? [];
+      daily.forEach((transaction) => {
+        const kind = transaction.transaction_kind ?? transaction.type;
+        if (kind === "transfer") {
+          applyDelta(transaction.from_account_id ?? null, -transaction.amount_cents);
+          applyDelta(transaction.to_account_id ?? null, transaction.amount_cents);
+        } else {
+          const sign = kind === "income" ? 1 : -1;
+          applyDelta(transaction.account_id ?? null, sign * transaction.amount_cents);
+        }
+      });
+
+      const total = Array.from(balances.values()).reduce((sum, value) => sum + value, 0);
+      points.push({ date: format(cursor, "MMM d"), balance: Math.round(total / 100) });
+      cursor = addDays(cursor, 1);
+    }
+
+    return points;
+  }, [accounts, allTransactions, netWorthStart, selectedCurrency, today]);
+
   return (
     <div className="space-y-8">
       <div>
@@ -304,6 +667,217 @@ export default function InsightsPage() {
           {isLoading ? <ChartFallback /> : <NetTrendChart data={netTrend} />}
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className={cardHover}>
+          <CardHeader>
+            <CardTitle>Safe to spend</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading balances" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-2xl font-semibold">
+                    {formatCurrency(safeToSpend.safeThisMonth, selectedCurrency)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Safe for the rest of the month
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span>
+                    Today: {formatCurrency(Math.round(safeToSpend.safeToday), selectedCurrency)}
+                  </span>
+                  <span>
+                    Upcoming recurring: {formatCurrency(upcomingNet, selectedCurrency)}
+                  </span>
+                  <span>
+                    Budget pace: {Math.round(safeToSpend.paceRatio * 100)}%
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    navigateToTransactions({
+                      start: currentMonthStart,
+                      end: currentMonthEnd
+                    })
+                  }
+                >
+                  View transactions
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className={cardHover}>
+          <CardHeader>
+            <CardTitle>Forecast</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Loading forecast" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-2xl font-semibold">
+                    {formatCurrency(Math.round(forecast.projectedNet), selectedCurrency)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Projected month net
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span>
+                    Trend/day: {formatCurrency(Math.round(forecast.dailyNet), selectedCurrency)}
+                  </span>
+                  <span>
+                    Net so far: {formatCurrency(forecast.netToDate, selectedCurrency)}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    navigateToTransactions({
+                      start: currentMonthStart,
+                      end: currentMonthEnd
+                    })
+                  }
+                >
+                  View transactions
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className={cardHover}>
+        <CardHeader>
+          <CardTitle>Net worth trend</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? <ChartFallback /> : <NetWorthChart data={netWorthTrend} />}
+          {!isLoading ? (
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span>Assets: {formatCurrency(accountSummary.assets, selectedCurrency)}</span>
+              <span>Liabilities: {formatCurrency(accountSummary.liabilities, selectedCurrency)}</span>
+              <span>Net: {formatCurrency(accountSummary.total, selectedCurrency)}</span>
+            </div>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              navigateToTransactions({
+                start: netWorthStart,
+                end: currentMonthEnd
+              })
+            }
+          >
+            View transactions
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className={cardHover}>
+          <CardHeader>
+            <CardTitle>Anomalies</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Scanning categories" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ) : anomalies.length ? (
+              anomalies.map((item) => (
+                <button
+                  key={item.categoryId}
+                  type="button"
+                  onClick={() =>
+                    navigateToTransactions({
+                      category: item.categoryId,
+                      start: format(subDays(today, 7), "yyyy-MM-dd"),
+                      end: currentMonthEnd
+                    })
+                  }
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40"
+                >
+                  <div>
+                    <p className="font-medium">{item.category}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(item.recentTotal, selectedCurrency)} in 7 days
+                    </p>
+                  </div>
+                  <Badge variant="secondary">Spike</Badge>
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No unusual category spikes detected.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className={cardHover}>
+          <CardHeader>
+            <CardTitle>Potential duplicates</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading ? (
+              <div className="space-y-2">
+                <LoadingText label="Scanning duplicates" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ) : duplicates.length ? (
+              duplicates.map((item, index) => (
+                <button
+                  key={`${item.merchant}-${item.date}-${index}`}
+                  type="button"
+                  onClick={() =>
+                    navigateToTransactions({
+                      search: item.merchant,
+                      start: item.date,
+                      end: item.matchDate
+                    })
+                  }
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40"
+                >
+                  <div>
+                    <p className="font-medium">{item.merchant}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(item.amount, selectedCurrency)} on {item.date} and {item.matchDate}
+                    </p>
+                  </div>
+                  <Badge variant="secondary">Duplicate</Badge>
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No duplicates detected in the last 30 days.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className={cardHover}>

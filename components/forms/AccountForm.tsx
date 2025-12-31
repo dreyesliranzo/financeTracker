@@ -26,6 +26,11 @@ const accountTypes = [
   { value: "other", label: "Other" }
 ] as const;
 
+const accountClasses = [
+  { value: "asset", label: "Asset" },
+  { value: "liability", label: "Liability" }
+] as const;
+
 export function AccountForm({
   account,
   onSuccess
@@ -42,6 +47,7 @@ export function AccountForm({
   const accountFormSchema = accountSchema.pick({
     name: true,
     type: true,
+    account_class: true,
     currency_code: true
   });
   type AccountFormValues = z.infer<typeof accountFormSchema>;
@@ -49,11 +55,14 @@ export function AccountForm({
 
   const defaultValues = useMemo<AccountFormValues>(() => {
     if (!account) {
-      return { name: "", type: "checking", currency_code: defaultCurrency };
+      return { name: "", type: "checking", account_class: "asset", currency_code: defaultCurrency };
     }
+    const fallbackClass =
+      account.account_class ?? (account.type === "credit" ? "liability" : "asset");
     return {
       name: account.name,
       type: account.type,
+      account_class: fallbackClass,
       currency_code: account.currency_code ?? "USD"
     };
   }, [account, defaultCurrency]);
@@ -106,6 +115,26 @@ export function AccountForm({
             {accountTypes.map((type) => (
               <SelectItem key={type.value} value={type.value}>
                 {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Class</Label>
+        <Select
+          value={form.watch("account_class")}
+          onValueChange={(value) =>
+            form.setValue("account_class", value as AccountFormValues["account_class"])
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select class" />
+          </SelectTrigger>
+          <SelectContent>
+            {accountClasses.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
               </SelectItem>
             ))}
           </SelectContent>
