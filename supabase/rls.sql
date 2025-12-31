@@ -11,6 +11,7 @@ alter table categorization_rules enable row level security;
 alter table recurring_rules enable row level security;
 alter table recurring_runs enable row level security;
 alter table transaction_attachments enable row level security;
+alter table subscription_candidates enable row level security;
 
 create policy "Accounts are viewable by owner" on accounts
   for select using (auth.uid() = user_id);
@@ -127,4 +128,13 @@ create policy "Attachments insert by owner" on transaction_attachments
 create policy "Attachments update by owner" on transaction_attachments
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "Attachments delete by owner" on transaction_attachments
+  for delete using (auth.uid() = user_id);
+
+create policy "Subscription candidates viewable by owner" on subscription_candidates
+  for select using (auth.uid() = user_id);
+create policy "Subscription candidates insert by owner" on subscription_candidates
+  for insert with check (auth.uid() = user_id);
+create policy "Subscription candidates update by owner" on subscription_candidates
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Subscription candidates delete by owner" on subscription_candidates
   for delete using (auth.uid() = user_id);

@@ -27,7 +27,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { successToast } from "@/lib/feedback";
-import { Badge } from "@/components/ui/badge";
 
 export function TransactionForm({
   transaction,
@@ -75,14 +74,14 @@ export function TransactionForm({
         date: new Date().toISOString().slice(0, 10),
         amount: "",
         type: savedDefaults?.type ?? "expense",
-        category_id: savedDefaults?.category_id ?? "",
-        account_id: savedDefaults?.account_id ?? "",
+        category_id: savedDefaults?.category_id ?? null,
+        account_id: savedDefaults?.account_id ?? null,
         currency_code: savedDefaults?.currency_code ?? defaultCurrency,
         merchant: "",
         notes: "",
         tags: "",
-        from_account_id: "",
-        to_account_id: "",
+        from_account_id: null,
+        to_account_id: null,
         splits: []
       };
     }
@@ -91,10 +90,10 @@ export function TransactionForm({
       date: transaction.date,
       amount: (transaction.amount_cents / 100).toFixed(2),
       type: (transaction.transaction_kind ?? transaction.type) as TransactionFormValues["type"],
-      category_id: transaction.category_id ?? "",
-      account_id: transaction.account_id ?? "",
-      from_account_id: transaction.from_account_id ?? "",
-      to_account_id: transaction.to_account_id ?? "",
+      category_id: transaction.category_id ?? null,
+      account_id: transaction.account_id ?? null,
+      from_account_id: transaction.from_account_id ?? null,
+      to_account_id: transaction.to_account_id ?? null,
       currency_code: transaction.currency_code ?? "USD",
       merchant: transaction.merchant ?? "",
       notes: transaction.notes ?? "",
@@ -129,16 +128,24 @@ export function TransactionForm({
   const txType = form.watch("type");
 
   useEffect(() => {
+    if (txType !== "transfer") return;
+    if (splits.fields.length > 0) {
+      splits.remove();
+    }
+    setShowSplits(false);
+  }, [txType, splits]);
+
+  useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues, form]);
 
   useEffect(() => {
     if (transaction) return;
     if (savedDefaults?.account_id && !accounts.some((item) => item.id === savedDefaults.account_id)) {
-      form.setValue("account_id", "");
+      form.setValue("account_id", null);
     }
     if (savedDefaults?.category_id && !categories.some((item) => item.id === savedDefaults.category_id)) {
-      form.setValue("category_id", "");
+      form.setValue("category_id", null);
     }
   }, [accounts, categories, form, savedDefaults, transaction]);
 
@@ -158,6 +165,12 @@ export function TransactionForm({
   const onSubmit = form.handleSubmit(async (values) => {
     if (!user) return;
 
+    const splitPayload =
+      values.splits?.map((split) => ({
+        category_id: split.category_id,
+        amount_cents: Math.abs(parseCurrencyToCents(split.amount)),
+        note: split.note ?? null
+      })) ?? [];
     const payload = {
       date: values.date,
       amount_cents: Math.abs(parseCurrencyToCents(values.amount)),
@@ -176,14 +189,7 @@ export function TransactionForm({
             .map((tag) => tag.trim())
             .filter(Boolean)
         : [],
-      transaction_splits:
-        values.splits && values.splits.length > 0
-          ? values.splits.map((split) => ({
-              category_id: split.category_id,
-              amount_cents: Math.abs(parseCurrencyToCents(split.amount)),
-              note: split.note ?? null
-            }))
-          : undefined
+      transaction_splits: txType === "transfer" ? undefined : splitPayload
     };
 
     try {
@@ -436,7 +442,7 @@ export function TransactionForm({
                     <div className="space-y-1 md:col-span-2">
                       <Label className="text-xs">Category</Label>
                       <Select
-                        value={form.watch(`splits.${index}.category_id`)}
+                        value={form.watch(`splits.${index}.category_id`) ?? ""}
                         onValueChange={(value) =>
                           form.setValue(`splits.${index}.category_id`, value)
                         }

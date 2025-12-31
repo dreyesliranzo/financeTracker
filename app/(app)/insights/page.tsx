@@ -12,6 +12,7 @@ import { fetchCategories, fetchProfile, fetchTransactionsSummary } from "@/lib/s
 import { formatCurrency } from "@/lib/money";
 import { currencyOptions } from "@/lib/money/currencies";
 import { NetTrendChart } from "@/components/charts/NetTrendChart";
+import { categoryTotals, flattenSplits, type TransactionWithSplits } from "@/lib/utils/transactions";
 
 export default function InsightsPage() {
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
@@ -39,7 +40,7 @@ export default function InsightsPage() {
     queryFn: fetchProfile
   });
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactionsRaw = [] } = useQuery({
     queryKey: ["transactions", previousStart, rangeEnd, selectedCurrency],
     queryFn: () =>
       fetchTransactionsSummary(
@@ -47,6 +48,7 @@ export default function InsightsPage() {
         selectedCurrency
       )
   });
+  const transactions = transactionsRaw as TransactionWithSplits[];
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -84,7 +86,9 @@ export default function InsightsPage() {
     const sum = (items: typeof current) =>
       items.reduce(
         (acc, transaction) => {
-          if ((transaction.transaction_kind ?? transaction.type) === "income") {
+          const kind = transaction.transaction_kind ?? transaction.type;
+          if (kind === "transfer") return acc;
+          if (kind === "income") {
             acc.income += transaction.amount_cents;
           } else {
             acc.expense += transaction.amount_cents;
@@ -101,18 +105,8 @@ export default function InsightsPage() {
   }, [current, previous]);
 
   const topCategories = useMemo(() => {
-    const totalsByCategory = new Map<string, number>();
-    current
-      .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
-      .forEach((transaction) => {
-        const key = transaction.category_id ?? "uncategorized";
-        totalsByCategory.set(
-          key,
-          (totalsByCategory.get(key) ?? 0) + transaction.amount_cents
-        );
-      });
-
-    return Array.from(totalsByCategory.entries())
+    const totalsByCategory = categoryTotals(current);
+    return Object.entries(totalsByCategory)
       .map(([categoryId, amount]) => ({
         categoryId,
         category: categoryNameMap.get(categoryId) ?? "Uncategorized",
@@ -147,7 +141,10 @@ export default function InsightsPage() {
       .filter((transaction) => (transaction.transaction_kind ?? transaction.type) === "expense")
       .forEach((transaction) => {
         const day = format(new Date(transaction.date), "EEE");
-        totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + transaction.amount_cents);
+        flattenSplits(transaction).forEach((line) => {
+          if (line.kind !== "expense") return;
+          totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + line.amount_cents);
+        });
       });
 
     const order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -160,10 +157,9 @@ export default function InsightsPage() {
   const netTrend = useMemo(() => {
     const daily = new Map<string, number>();
     current.forEach((transaction) => {
-      const value =
-        (transaction.transaction_kind ?? transaction.type) === "income"
-          ? transaction.amount_cents
-          : -transaction.amount_cents;
+      const kind = transaction.transaction_kind ?? transaction.type;
+      if (kind === "transfer") return;
+      const value = kind === "income" ? transaction.amount_cents : -transaction.amount_cents;
       daily.set(transaction.date, (daily.get(transaction.date) ?? 0) + value);
     });
     return Array.from(daily.entries())
@@ -179,7 +175,12 @@ export default function InsightsPage() {
     return current
       .filter((transaction) => {
         if (selectedCategory === "uncategorized") {
-          return !transaction.category_id;
+          return !transaction.category_id && (transaction.transaction_splits?.length ?? 0) === 0;
+        }
+        if (transaction.transaction_splits?.length) {
+          return transaction.transaction_splits.some(
+            (split) => split.category_id === selectedCategory
+          );
         }
         return transaction.category_id === selectedCategory;
       })

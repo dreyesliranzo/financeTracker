@@ -7,7 +7,7 @@ import type { Route } from "next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { fetchAccounts, fetchCategories, fetchTransactionsPage } from "@/lib/supabase/queries";
-import { formatSignedCurrency } from "@/lib/money";
+import { formatCurrency, formatSignedCurrency } from "@/lib/money";
 
 export function GlobalSearch() {
   const router = useRouter();
@@ -103,11 +103,13 @@ export function GlobalSearch() {
                     >
                       <span className="truncate">{transaction.merchant ?? transaction.date}</span>
                       <span className="font-medium">
-                        {formatSignedCurrency(
-                          transaction.amount_cents,
-                          (transaction.transaction_kind ?? transaction.type) === "income" ? "income" : "expense",
-                          transaction.currency_code ?? "USD"
-                        )}
+                        {(transaction.transaction_kind ?? transaction.type) === "transfer"
+                          ? formatCurrency(transaction.amount_cents, transaction.currency_code ?? "USD")
+                          : formatSignedCurrency(
+                              transaction.amount_cents,
+                              (transaction.transaction_kind ?? transaction.type) === "income" ? "income" : "expense",
+                              transaction.currency_code ?? "USD"
+                            )}
                       </span>
                     </button>
                   ))}

@@ -122,9 +122,17 @@ export async function updateTransaction(
   }
 ) {
   const { transaction_splits, ...rest } = values;
+  const updateValues: Record<string, unknown> = {
+    ...rest,
+    updated_at: new Date().toISOString()
+  };
+  if (rest.type) {
+    updateValues.transaction_kind = rest.type;
+  }
+
   const { data, error } = await supabaseBrowser()
     .from("transactions")
-    .update({ ...rest, transaction_kind: rest.type, updated_at: new Date().toISOString() })
+    .update(updateValues)
     .eq("id", id)
     .select("*, transaction_splits(id,category_id,amount_cents,note)")
     .single();

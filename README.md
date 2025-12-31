@@ -22,6 +22,15 @@ A dark-first personal finance tracker with Supabase auth, realtime sync, and a C
    - `http://localhost:3000/*`
    - `https://<your-vercel-domain>/*`
 
+### 1b) Supabase Cron (pg_cron)
+1. In the SQL editor, run:
+   - `supabase/cron.sql`
+2. This schedules:
+   - `process_recurring_rules()` every 5 minutes
+   - `apply_categorization_rules()` every 15 minutes
+   - `detect_subscription_candidates()` hourly
+3. Cron runs in UTC by default. If you re-run, delete existing jobs in **Database > Cron** first.
+
 ### Advanced finance primitives
 - Transfers: `transactions` support `transaction_kind` (`expense` | `income` | `transfer`) plus `from_account_id` / `to_account_id` for transfers.
 - Splits: `transaction_splits` store per-category amounts and notes for a parent transaction.

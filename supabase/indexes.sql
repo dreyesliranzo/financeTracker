@@ -5,10 +5,14 @@ create index if not exists transactions_user_id_date_idx on transactions(user_id
 create index if not exists transactions_transfer_accounts_idx on transactions(from_account_id, to_account_id);
 create index if not exists budgets_user_id_month_idx on budgets(user_id, month);
 create index if not exists transaction_splits_user_id_idx on transaction_splits(user_id);
+create index if not exists transaction_splits_tx_id_idx on transaction_splits(transaction_id);
 create index if not exists categorization_rules_user_id_idx on categorization_rules(user_id);
 create index if not exists recurring_rules_user_id_idx on recurring_rules(user_id);
 create index if not exists recurring_runs_user_id_idx on recurring_runs(user_id);
 create index if not exists transaction_attachments_user_id_idx on transaction_attachments(user_id);
+create unique index if not exists recurring_runs_rule_scheduled_idx on recurring_runs(rule_id, scheduled_for);
+create index if not exists subscription_candidates_user_id_idx on subscription_candidates(user_id);
+create unique index if not exists subscription_candidates_user_merchant_idx on subscription_candidates(user_id, merchant);
 create index if not exists overall_budgets_user_id_month_idx on overall_budgets(user_id, month);
 create index if not exists recurring_user_id_idx on recurring_transactions(user_id);
 create index if not exists recurring_user_id_next_run_idx on recurring_transactions(user_id, next_run);

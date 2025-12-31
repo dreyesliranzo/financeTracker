@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { strict as assert } from "node:assert";
-import { categoryTotals, sumIncomeExpense, flattenSplits } from "@/lib/utils/transactions";
+import { categoryTotals, sumIncomeExpense, flattenSplits } from "../lib/utils/transactions";
 
 const baseTx = (overrides = {}) => ({
   id: "t1",
